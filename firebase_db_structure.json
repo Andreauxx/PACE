@@ -1,0 +1,9 @@
+{
+  "system": {
+    "ammoniaLevel": 12.5,
+    "binCapacity": 75,
+    "status": "Idle",
+    "manualCleanTrigger": false,
+    "lastUpdated": 1690000000000
+  }
+}
