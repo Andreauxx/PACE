@@ -1,7 +1,6 @@
 {
+  "extends": "./mobile-app/tsconfig.json",
   "compilerOptions": {
-    "jsx": "react-native",
-    "strict": true
-  },
-  "include": ["mobile-app/**/*"]
+    "esModuleInterop": true
+  }
 }

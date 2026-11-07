@@ -1,117 +1,126 @@
 // ============================================================
-// AgriSweep — Design System Theme Constants
-// ============================================================
-
-// ============================================================
-// AgriSweep — Modern Design System Theme Constants
+// AgriSweep — Design Tokens
+//
+// Palette from the coop: galvanized cage wire, barn green,
+// straw, comb red and rinse water.
+//   Straw      → anything that makes the machine move
+//   Comb red   → stop, full bin, faults — nothing else
+//   Rinse blue → the water pump — nothing else
+//
+// Type: Big Shoulders Display (condensed, industrial signage)
+// for titles, status lines and numbers; Atkinson Hyperlegible
+// (built for low-vision reading) for everything else, so the
+// app stays readable in a dim barn.
 // ============================================================
 
 import { Platform } from 'react-native';
 
-export const Colors = {
-  // Primary brand: Modern Emerald & Clean Tech Mint
-  primary: '#059669',          // Modern Jewel Emerald
-  primaryLight: '#10B981',     // Luminous Neo-Mint
-  primaryDark: '#047857',      // Deep Forest Emerald
-  primarySurface: '#ECFDF5',   // Soft Mint Porcelain
-  primaryGlow: 'rgba(16, 185, 129, 0.20)',
-
-  // Accent / fresh mint highlights
-  accent: '#10B981',
-  accentLight: '#34D399',
-  accentDark: '#059669',
-
-  // Background: Crisp slate porcelain canvas
-  background: '#F8FAFC',       // Clean, high-end, bright slate
-  surface: '#FFFFFF',
-  surfaceElevated: '#FFFFFF',
-  card: '#FFFFFF',
-
-  // Typography: High-contrast modern Slate
-  text: '#0F172A',             // Slate 900
-  textSecondary: '#475569',    // Slate 600
-  textTertiary: '#94A3B8',     // Slate 400
-  textInverse: '#FFFFFF',
-
-  // Status Colors
-  success: '#10B981',
-  successLight: '#ECFDF5',
-  warning: '#F59E0B',
-  warningLight: '#FFFBEB',
-  warningDark: '#D97706',
-  error: '#EF4444',
-  errorLight: '#FEF2F2',
-  errorDark: '#DC2626',
-  info: '#0284C7',
-  infoLight: '#F0F9FF',
-
-  // Connection states
-  online: '#10B981',
-  connecting: '#F59E0B',
-  offline: '#94A3B8',
-  demo: '#8B5CF6',             // Sleek Violet Indigo
-
-  // Sensor states
-  sensorNormal: '#10B981',
-  sensorElevated: '#F59E0B',
-  sensorWarning: '#F97316',
-  sensorCritical: '#EF4444',
-  sensorUnavailable: '#94A3B8',
-
-  // Cleaning states
-  cleaningIdle: '#64748B',
-  cleaningActive: '#059669',
-  cleaningCompleted: '#10B981',
-  cleaningFailed: '#EF4444',
-
-  // UI elements: Crisp, subtle borders and glass tokens
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
-  divider: '#F1F5F9',
-  shadow: 'rgba(15, 23, 42, 0.06)',
-  shadowDark: 'rgba(15, 23, 42, 0.12)',
-  overlay: 'rgba(15, 23, 42, 0.60)',
-  disabled: '#CBD5E1',
-  disabledBg: '#F1F5F9',
-
-  // Tab bar
-  tabBarBg: '#FFFFFF',
-  tabBarActive: '#059669',
-  tabBarInactive: '#94A3B8',
-
-  // Emergency
-  emergency: '#E11D48',
-  emergencyBg: '#FFE4E6',
-
-  // Chart
-  chartLine1: '#059669',
-  chartLine2: '#0284C7',
-  chartGrid: '#F1F5F9',
-  chartThreshold: '#F59E0B',
+const palette = {
+  galvanized: '#DDE2E0',
+  steel: '#F5F6F3',
+  sunken: '#E9ECEA',
+  ink: '#1F2A24',
+  inkSoft: '#2E3B33',
+  barn: '#2F5A45',
+  barnLight: '#4C7A60',
+  barnDark: '#1F3D2F',
+  barnTint: '#E2EAE3',
+  straw: '#E5B323',
+  strawLight: '#F2D27A',
+  strawTint: '#F7EDCB',
+  comb: '#B5342B',
+  combDark: '#8C241D',
+  combTint: '#F3DFDC',
+  rinse: '#2D6E93',
+  rinseTint: '#DCE8EF',
+  amber: '#B97F0E',
+  amberDark: '#86600A',
+  moss: '#3E7D4F',
+  mossTint: '#E0ECE2',
+  line: '#C8CFCB',
+  lineSoft: '#E1E5E2',
+  muted: '#4A5650',
+  faint: '#69736D',
 };
 
-export const DarkColors = {
-  ...Colors,
-  background: '#090D16',
-  surface: '#111827',
-  surfaceElevated: '#1F2937',
-  card: '#111827',
-  text: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textTertiary: '#64748B',
-  border: '#1E293B',
-  borderLight: '#1E293B',
-  divider: '#1E293B',
-  shadow: 'rgba(0, 0, 0, 0.4)',
-  shadowDark: 'rgba(0, 0, 0, 0.6)',
-  tabBarBg: '#111827',
-  primarySurface: 'rgba(16, 185, 129, 0.12)',
-  successLight: 'rgba(16, 185, 129, 0.15)',
-  warningLight: 'rgba(245, 158, 11, 0.15)',
-  errorLight: 'rgba(239, 68, 68, 0.15)',
-  infoLight: 'rgba(2, 132, 199, 0.15)',
-  disabledBg: '#1E293B',
-  chartGrid: '#1E293B',
+export const Colors = {
+  ...palette,
+
+  // Roles (kept for existing components)
+  primary: palette.barn,
+  primaryLight: palette.barnLight,
+  primaryDark: palette.barnDark,
+  primarySurface: palette.barnTint,
+  primaryGlow: 'rgba(47, 90, 69, 0.18)',
+
+  accent: palette.straw,
+  accentLight: palette.strawLight,
+  accentDark: palette.amberDark,
+
+  background: palette.galvanized,
+  surface: palette.steel,
+  surfaceElevated: '#FFFFFF',
+  card: palette.steel,
+
+  text: palette.ink,
+  textSecondary: palette.muted,
+  textTertiary: palette.faint,
+  textInverse: '#FFFFFF',
+  textOnStraw: palette.ink,
+
+  success: palette.moss,
+  successLight: palette.mossTint,
+  warning: palette.amber,
+  warningLight: palette.strawTint,
+  warningDark: palette.amberDark,
+  error: palette.comb,
+  errorLight: palette.combTint,
+  errorDark: palette.combDark,
+  info: palette.rinse,
+  infoLight: palette.rinseTint,
+
+  online: palette.moss,
+  connecting: palette.amber,
+  offline: palette.faint,
+
+  sensorNormal: palette.moss,
+  sensorElevated: palette.amber,
+  sensorWarning: '#C7661A',
+  sensorCritical: palette.comb,
+  sensorUnavailable: '#9AA39E',
+
+  cleaningIdle: palette.faint,
+  cleaningActive: palette.barn,
+  cleaningCompleted: palette.moss,
+  cleaningFailed: palette.comb,
+
+  border: palette.line,
+  borderLight: palette.lineSoft,
+  divider: palette.lineSoft,
+  shadow: 'transparent',
+  shadowDark: 'transparent',
+  overlay: 'rgba(31, 42, 36, 0.55)',
+  disabled: '#B4BCB8',
+  disabledBg: '#E4E7E5',
+
+  tabBarBg: palette.steel,
+  tabBarActive: palette.ink,
+  tabBarInactive: palette.faint,
+
+  emergency: palette.comb,
+  emergencyBg: palette.combTint,
+
+  chartLine1: palette.barn,
+  chartLine2: palette.rinse,
+  chartGrid: palette.lineSoft,
+  chartThreshold: palette.amber,
+};
+
+export const Fonts = {
+  regular: 'AtkinsonHyperlegible_400Regular',
+  bold: 'AtkinsonHyperlegible_700Bold',
+  display: 'BigShouldersDisplay_800ExtraBold',
+  displayBold: 'BigShouldersDisplay_700Bold',
 };
 
 export const Spacing = {
@@ -124,26 +133,29 @@ export const Spacing = {
   xxxl: 32,
 };
 
+// Radius follows hierarchy: pills > panels > controls > ticks.
 export const BorderRadius = {
-  xs: 6,
-  sm: 8,
-  md: 12,
-  lg: 18,
-  xl: 24,
+  xs: 4,
+  sm: 6,
+  md: 10,
+  lg: 14,
+  xl: 18,
   full: 9999,
 };
 
+// Scale ≈ 1.2 for text, jumping for display numbers.
 export const FontSize = {
-  xs: 11,
-  sm: 13,
-  md: 15,
-  lg: 17,
-  xl: 20,
-  xxl: 24,
-  xxxl: 30,
-  display: 36,
+  xs: 12,
+  sm: 14,
+  md: 16,
+  lg: 19,
+  xl: 23,
+  xxl: 28,
+  xxxl: 36,
+  display: 48,
 };
 
+/** Kept for components that still pass fontWeight (e.g. SVG text). */
 export const FontWeight = {
   regular: '400' as const,
   medium: '500' as const,
@@ -152,39 +164,11 @@ export const FontWeight = {
   extrabold: '800' as const,
 };
 
-export const Shadows = {
-  sm: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  md: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  lg: {
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    elevation: 6,
-  },
-  glow: {
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-};
+// Flat design: hierarchy comes from fill and line, not drop shadows.
+const flat = { shadowColor: 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 };
+export const Shadows = { sm: flat, md: flat, lg: flat, glow: flat };
 
-// SVG <Text> doesn't inherit the page font on web (falls back to serif).
 export const SvgFontFamily = Platform.select({
-  web: 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  default: undefined,
+  web: '"Atkinson Hyperlegible", system-ui, sans-serif',
+  default: Fonts.bold,
 });

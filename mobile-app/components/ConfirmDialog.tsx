@@ -6,61 +6,41 @@
 
 import React from 'react';
 import { Modal, View, Text, StyleSheet, Pressable } from 'react-native';
-import { AlertTriangle, FlaskConical } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../constants/theme';
+import { BorderRadius, Colors, Fonts, FontSize, Spacing } from '../constants/theme';
 
 interface ConfirmDialogProps {
   visible: boolean;
   title: string;
   message: string;
   confirmLabel: string;
+  /** primary = starts something moving (straw); danger = comb red. */
   tone?: 'primary' | 'danger';
-  isDemoMode?: boolean;
   icon?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export default function ConfirmDialog({
-  visible,
-  title,
-  message,
-  confirmLabel,
-  tone = 'primary',
-  isDemoMode,
-  icon,
-  onConfirm,
-  onCancel,
-}: ConfirmDialogProps) {
-  const accent = tone === 'danger' ? Colors.error : Colors.primary;
-
+export default function ConfirmDialog({ visible, title, message, confirmLabel, tone = 'primary', icon, onConfirm, onCancel }: ConfirmDialogProps) {
+  const danger = tone === 'danger';
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.overlay} onPress={onCancel}>
         {/* Inner Pressable swallows taps so they don't dismiss the dialog */}
         <Pressable style={styles.dialog} onPress={() => {}}>
-          <View style={[styles.iconBox, { backgroundColor: `${accent}18`, borderColor: `${accent}40` }]}>
-            {icon ?? <AlertTriangle size={22} color={accent} />}
+          <View style={styles.titleRow}>
+            {icon}
+            <Text style={styles.title}>{title}</Text>
           </View>
-          <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
-
-          {isDemoMode && (
-            <View style={styles.demoNote}>
-              <FlaskConical size={13} color="#7C3AED" />
-              <Text style={styles.demoText}>Demo mode: simulated hardware only.</Text>
-            </View>
-          )}
-
           <View style={styles.actions}>
-            <Pressable style={({ pressed }) => [styles.btn, styles.cancelBtn, pressed && styles.pressed]} onPress={onCancel}>
+            <Pressable style={({ pressed }) => [styles.btn, styles.cancel, pressed && styles.pressed]} onPress={onCancel}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [styles.btn, { backgroundColor: accent }, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.btn, danger ? styles.danger : styles.go, pressed && styles.pressed]}
               onPress={onConfirm}
             >
-              <Text style={styles.confirmText}>{confirmLabel}</Text>
+              <Text style={[styles.confirmText, danger && { color: '#FFFFFF' }]}>{confirmLabel}</Text>
             </Pressable>
           </View>
         </Pressable>
@@ -73,84 +53,66 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
-    alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.xl,
   },
   dialog: {
     width: '100%',
-    maxWidth: 380,
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
+    maxWidth: 400,
+    alignSelf: 'center',
+    backgroundColor: Colors.steel,
+    borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
-    alignItems: 'center',
-    ...Shadows.lg,
   },
-  iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.extrabold,
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: FontSize.sm,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginTop: Spacing.sm,
-  },
-  demoNote: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing.md,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    backgroundColor: '#F5F3FF',
+    gap: Spacing.sm,
   },
-  demoText: {
-    fontSize: FontSize.xs,
-    color: '#6D28D9',
-    fontWeight: FontWeight.semibold,
+  title: {
+    flex: 1,
+    fontFamily: Fonts.display,
+    fontSize: FontSize.xxl,
+    color: Colors.ink,
+  },
+  message: {
+    fontFamily: Fonts.regular,
+    fontSize: FontSize.sm,
+    lineHeight: 21,
+    color: Colors.muted,
+    marginTop: Spacing.sm,
   },
   actions: {
     flexDirection: 'row',
     gap: Spacing.sm,
     marginTop: Spacing.xl,
-    alignSelf: 'stretch',
   },
   btn: {
     flex: 1,
-    paddingVertical: 13,
-    borderRadius: 14,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
   },
-  cancelBtn: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  cancel: {
+    backgroundColor: Colors.sunken,
+  },
+  go: {
+    backgroundColor: Colors.straw,
+  },
+  danger: {
+    backgroundColor: Colors.comb,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.85,
   },
   cancelText: {
+    fontFamily: Fonts.bold,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: Colors.textSecondary,
+    color: Colors.muted,
   },
   confirmText: {
+    fontFamily: Fonts.bold,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
+    color: Colors.ink,
   },
 });

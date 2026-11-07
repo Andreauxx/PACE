@@ -7,7 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { Wind } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows, SvgFontFamily } from '../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Shadows, Spacing, SvgFontFamily } from '../constants/theme';
 import { APP_CONFIG } from '../constants/config';
 import { SensorStatus } from '../types';
 import { Trend, clamp } from '../utils/sensors';
@@ -43,11 +43,11 @@ export const ammoniaStatusColor: Record<SensorStatus, string> = {
 };
 
 const statusLabel: Record<SensorStatus, string> = {
-  normal: 'NORMAL',
-  elevated: 'ELEVATED',
-  warning: 'WARNING',
-  critical: 'DANGER',
-  unavailable: 'NO DATA',
+  normal: 'Normal',
+  elevated: 'Elevated',
+  warning: 'Warning',
+  critical: 'Danger',
+  unavailable: 'No data',
 };
 
 const statusBadgeVariant: Record<SensorStatus, 'success' | 'warning' | 'error' | 'neutral'> = {
@@ -198,12 +198,9 @@ function LegendChip({ color, label, range, active }: { color: string; label: str
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 14,
     padding: Spacing.lg,
     marginBottom: Spacing.lg,
-    ...Shadows.sm,
   },
   header: {
     flexDirection: 'row',
@@ -217,18 +214,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primarySurface,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     letterSpacing: -0.2,
   },
@@ -236,7 +231,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     marginTop: 1,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   gaugeWrap: {
     alignItems: 'center',
@@ -266,13 +261,13 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.textSecondary,
   },
   legendRange: {
     fontSize: 10,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   footer: {
     flexDirection: 'row',
@@ -286,6 +281,6 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
 });

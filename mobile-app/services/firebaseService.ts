@@ -15,8 +15,15 @@
 
 import { APP_CONFIG } from '../constants/config';
 import {
+  AutomationSettings,
+  AutomationState,
+  DetectorProvider,
+  TriggerRecord,
+  TriggerSource,
+  VisionStatus,
   FirebaseCommandPatch,
   FirebaseConfig,
+  JogCommand,
   FirebaseConnectionState,
   FirebasePingResult,
   FirebaseSystemConfig,
@@ -125,22 +132,37 @@ export function parseSystemSnapshot(tree: JsonValue): FirebaseSystemSnapshot {
   const config = isObject(system.config) ? system.config : {};
 
   const parsedConfig: Partial<FirebaseSystemConfig> = {};
-  const maxScraperRuntimeMs = asNumber(config.maxScraperRuntimeMs);
-  const pumpDurationMs = asNumber(config.pumpDurationMs);
-  const ammoniaWarningThreshold = asNumber(config.ammoniaWarningThreshold);
-  const binWarningDistanceCm = asNumber(config.binWarningDistanceCm);
-  if (maxScraperRuntimeMs !== null) parsedConfig.maxScraperRuntimeMs = maxScraperRuntimeMs;
-  if (pumpDurationMs !== null) parsedConfig.pumpDurationMs = pumpDurationMs;
-  if (ammoniaWarningThreshold !== null) parsedConfig.ammoniaWarningThreshold = ammoniaWarningThreshold;
-  if (binWarningDistanceCm !== null) parsedConfig.binWarningDistanceCm = binWarningDistanceCm;
+  const numericKeys = [
+    'scraperSpeedPercent',
+    'strokeDistanceCm',
+    'strokeTimeMs',
+    'jogDistanceCm',
+    'travelCmPerSec',
+    'maxScraperRuntimeMs',
+    'pumpDurationMs',
+    'ammoniaWarningThreshold',
+    'binWarningDistanceCm',
+  ] as const;
+  for (const key of numericKeys) {
+    const n = asNumber(config[key]);
+    if (n !== null) parsedConfig[key] = n;
+  }
+  const rinse = asBoolean(config.rinseAfterSweep);
+  if (rinse !== null) parsedConfig.rinseAfterSweep = rinse;
+
+  const automationState = isObject(system.automationState) ? system.automationState : {};
+  const vision = isObject(system.vision) ? system.vision : null;
+  const lastTrigger = isObject(system.lastTrigger) ? system.lastTrigger : null;
+  const triggerSource = asString(lastTrigger?.source);
+  const provider = asString(vision?.provider);
 
   return {
     status: asString(system.status),
     operatingMode: asString(system.operatingMode),
     ammoniaRaw: asNumber(system.ammoniaRaw),
-    ammoniaLevel: asNumber(system.ammoniaLevel),
+    ammoniaLevel: asNumber(system.ammoniaLevel) ?? asNumber(system.ammonia_ppm),
     distanceCm: asNumber(system.distanceCm),
-    binCapacity: asNumber(system.binCapacity),
+    binCapacity: asNumber(system.binCapacity) ?? asNumber(system.bin_capacity_percent),
     lastUpdated: asNumber(system.lastUpdated),
     lastCleaningCycleTime: asNumber(system.lastCleaningCycleTime),
     manualCleanTrigger: asBoolean(system.manualCleanTrigger) ?? false,
@@ -148,8 +170,6 @@ export function parseSystemSnapshot(tree: JsonValue): FirebaseSystemSnapshot {
       running: asBoolean(scraper.running),
       direction: asString(scraper.direction),
       stage: asString(scraper.stage),
-      limitSwitchForward: asBoolean(scraper.limitSwitchForward),
-      limitSwitchReverse: asBoolean(scraper.limitSwitchReverse),
       fault: asString(scraper.fault),
     },
     pump: {
@@ -158,13 +178,46 @@ export function parseSystemSnapshot(tree: JsonValue): FirebaseSystemSnapshot {
       fault: asString(pump.fault),
     },
     controls: {
-      manualScraperForward: asBoolean(controls.manualScraperForward) ?? false,
-      manualScraperReverse: asBoolean(controls.manualScraperReverse) ?? false,
+      jog: parseJog(controls.jog),
       manualPumpTrigger: asBoolean(controls.manualPumpTrigger) ?? false,
       emergencyStop: asBoolean(controls.emergencyStop) ?? false,
     },
     config: parsedConfig,
+    automation: isObject(system.automation) ? system.automation : null,
+    automationState: {
+      lastAutoTriggerAt: asNumber(automationState.lastAutoTriggerAt),
+      lastScheduleKey: asString(automationState.lastScheduleKey),
+    },
+    vision: vision
+      ? {
+          online: asBoolean(vision.online) ?? false,
+          lastSeen: asNumber(vision.lastSeen),
+          lastFrameAt: asNumber(vision.lastFrameAt),
+          detections: asNumber(vision.detections) ?? 0,
+          maxConfidence: asNumber(vision.maxConfidence) ?? 0,
+          coveragePercent: asNumber(vision.coveragePercent) ?? 0,
+          streak: asNumber(vision.streak) ?? 0,
+          provider: provider === 'simulated' || provider === 'roboflow' ? (provider as DetectorProvider) : null,
+          error: asString(vision.error),
+        }
+      : null,
+    lastTrigger:
+      lastTrigger && isTriggerSource(triggerSource)
+        ? { source: triggerSource, at: asNumber(lastTrigger.at) ?? 0, detail: asString(lastTrigger.detail) }
+        : null,
   };
+}
+
+function parseJog(value: JsonValue | undefined): JogCommand | null {
+  if (!isObject(value)) return null;
+  const direction = value.direction === 'forward' || value.direction === 'reverse' ? value.direction : null;
+  const durationMs = asNumber(value.durationMs);
+  if (!direction || durationMs === null) return null;
+  return { direction, durationMs, distanceCm: asNumber(value.distanceCm) ?? 0, at: asNumber(value.at) ?? 0 };
+}
+
+function isTriggerSource(value: string | null): value is TriggerSource {
+  return value === 'manual' || value === 'schedule' || value === 'ai' || value === 'sensor';
 }
 
 // ---- Service ----
@@ -266,6 +319,18 @@ class FirebaseService {
 
   async writeConfig(config: Partial<FirebaseSystemConfig>): Promise<void> {
     await this.request('PATCH', 'system/config', config);
+  }
+
+  async writeAutomation(settings: AutomationSettings): Promise<void> {
+    await this.request('PUT', 'system/automation', settings);
+  }
+
+  async writeAutomationState(state: Partial<AutomationState>): Promise<void> {
+    await this.request('PATCH', 'system/automationState', state);
+  }
+
+  async writeVision(status: VisionStatus): Promise<void> {
+    await this.request('PUT', 'system/vision', status);
   }
 
   /** Measures round-trip time to the database without downloading the whole tree. */
@@ -460,7 +525,13 @@ class FirebaseService {
   private async request(
     method: 'GET' | 'PATCH' | 'PUT',
     path: string,
-    body?: FirebaseCommandPatch | Partial<FirebaseSystemConfig>,
+    body?:
+      | FirebaseCommandPatch
+      | Partial<FirebaseSystemConfig>
+      | AutomationSettings
+      | Partial<AutomationState>
+      | VisionStatus
+      | TriggerRecord,
     query: Record<string, string> = {},
     config: FirebaseConfig = this.config
   ): Promise<JsonValue> {

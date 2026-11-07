@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Radar } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, Shadows } from '../constants/theme';
+import { Colors, FontSize, FontWeight, Fonts, Shadows, Spacing } from '../constants/theme';
 import { SensorStatus } from '../types';
 import { Trend, binCapacityFromDistance, clamp } from '../utils/sensors';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
@@ -27,19 +27,19 @@ interface BinLevelTankProps {
 const TANK_HEIGHT = 168;
 
 const fillColor: Record<SensorStatus, { fill: string; surface: string }> = {
-  normal: { fill: '#10B981', surface: '#34D399' },
-  elevated: { fill: '#F59E0B', surface: '#FBBF24' },
-  warning: { fill: '#F59E0B', surface: '#FBBF24' },
-  critical: { fill: '#EF4444', surface: '#F87171' },
-  unavailable: { fill: '#CBD5E1', surface: '#E2E8F0' },
+  normal: { fill: Colors.primaryLight, surface: Colors.straw },
+  elevated: { fill: Colors.warning, surface: Colors.warning },
+  warning: { fill: Colors.warning, surface: Colors.warning },
+  critical: { fill: Colors.error, surface: Colors.error },
+  unavailable: { fill: Colors.disabled, surface: Colors.border },
 };
 
 const statusLabel: Record<SensorStatus, string> = {
   normal: 'Normal',
   elevated: 'Elevated',
-  warning: 'Empty Soon',
-  critical: 'Bin Full',
-  unavailable: 'No Data',
+  warning: 'Empty soon',
+  critical: 'Bin full',
+  unavailable: 'No data',
 };
 
 const statusVariant: Record<SensorStatus, 'success' | 'warning' | 'error' | 'neutral'> = {
@@ -74,8 +74,8 @@ export default function BinLevelTank({
             <Radar size={18} color={Colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Waste Bin Level</Text>
-            <Text style={styles.subtitle}>HC-SR04 Ultrasonic · collection reservoir</Text>
+            <Text style={styles.title}>Waste bin</Text>
+            <Text style={styles.subtitle}>Measured from above by the HC-SR04</Text>
           </View>
         </View>
         <StatusBadge label={statusLabel[status]} variant={statusVariant[status]} />
@@ -113,7 +113,7 @@ export default function BinLevelTank({
 
         {/* Readout */}
         <View style={styles.readout}>
-          <Text style={styles.percentLabel}>FILL LEVEL</Text>
+          <Text style={styles.percentLabel}>Fill level</Text>
           <View style={styles.percentRow}>
             <Text style={styles.percent}>{hasData ? Math.round(level) : '—'}</Text>
             <Text style={styles.percentUnit}>%</Text>
@@ -155,12 +155,9 @@ function Metric({ label, value, emphasis, dotColor }: { label: string; value: st
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 14,
     padding: Spacing.lg,
     marginBottom: Spacing.lg,
-    ...Shadows.sm,
   },
   header: {
     flexDirection: 'row',
@@ -175,18 +172,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.primarySurface,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     letterSpacing: -0.2,
   },
@@ -194,7 +189,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     marginTop: 1,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   body: {
     flexDirection: 'row',
@@ -207,7 +202,7 @@ const styles = StyleSheet.create({
   sensorHead: {
     flexDirection: 'row',
     gap: 6,
-    backgroundColor: '#1E293B',
+    backgroundColor: Colors.ink,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -217,16 +212,16 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#94A3B8',
+    backgroundColor: Colors.textTertiary,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: Colors.disabled,
   },
   tank: {
     width: 96,
     height: TANK_HEIGHT,
     borderWidth: 2,
     borderTopWidth: 0,
-    borderColor: '#CBD5E1',
+    borderColor: Colors.disabled,
     borderBottomLeftRadius: 18,
     borderBottomRightRadius: 18,
     backgroundColor: Colors.background,
@@ -247,7 +242,7 @@ const styles = StyleSheet.create({
     left: '50%',
     width: 2,
     marginLeft: -1,
-    backgroundColor: 'rgba(2, 132, 199, 0.35)',
+    backgroundColor: 'rgba(45, 110, 147, 0.35)',
   },
   graduation: {
     position: 'absolute',
@@ -260,12 +255,12 @@ const styles = StyleSheet.create({
   graduationTick: {
     width: 10,
     height: 1.5,
-    backgroundColor: 'rgba(100, 116, 139, 0.5)',
+    backgroundColor: 'rgba(105, 115, 109, 0.5)',
   },
   graduationLabel: {
     fontSize: 9,
-    color: 'rgba(71, 85, 105, 0.8)',
-    fontWeight: FontWeight.semibold,
+    color: 'rgba(74, 86, 80, 0.8)',
+    fontFamily: Fonts.bold,
   },
   threshold: {
     position: 'absolute',
@@ -279,9 +274,8 @@ const styles = StyleSheet.create({
   },
   percentLabel: {
     fontSize: 10,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.textTertiary,
-    letterSpacing: 1.2,
   },
   percentRow: {
     flexDirection: 'row',
@@ -291,13 +285,13 @@ const styles = StyleSheet.create({
   },
   percent: {
     fontSize: 44,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: Colors.text,
     letterSpacing: -1.5,
   },
   percentUnit: {
     fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.textSecondary,
   },
   metrics: {
@@ -321,16 +315,16 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   metricValue: {
     fontSize: FontSize.xs,
     color: Colors.text,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
   },
   metricValueEmphasis: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: Colors.info,
   },
   footer: {
@@ -345,6 +339,6 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
 });

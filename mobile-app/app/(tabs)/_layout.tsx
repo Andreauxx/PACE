@@ -1,101 +1,97 @@
 // ============================================================
-// AgriSweep — Modern Tab Navigation Layout
+// AgriSweep — Tab Navigation
+// Home · Controls · Automation · History · Settings
+// (About opens from Settings as its own page.)
+// The active tab gets a short straw mark under its label.
 // ============================================================
 
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { LayoutDashboard, History, Settings, Info } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { House, Gamepad2, Bot, History, Settings } from 'lucide-react-native';
+import { Colors, Fonts } from '../../constants/theme';
 
-function TabIcon({ icon: Icon, label, focused }: { icon: typeof LayoutDashboard; label: string; focused: boolean }) {
+function TabIcon({ icon: Icon, label, focused }: { icon: typeof House; label: string; focused: boolean }) {
   return (
-    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
-      <Icon
-        size={20}
-        color={focused ? '#059669' : '#94A3B8'}
-        strokeWidth={focused ? 2.5 : 1.8}
-      />
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+    <View style={styles.tabItem}>
+      <Icon size={21} color={focused ? Colors.ink : Colors.faint} strokeWidth={focused ? 2.3 : 1.8} />
+      <Text numberOfLines={1} style={[styles.tabLabel, focused && styles.tabLabelActive]}>
+        {label}
+      </Text>
+      <View style={[styles.lamp, focused && styles.lampOn]} />
     </View>
   );
 }
 
+const TABS = [
+  { name: 'index', label: 'Home', icon: House },
+  { name: 'controls', label: 'Controls', icon: Gamepad2 },
+  { name: 'automation', label: 'Automation', icon: Bot },
+  { name: 'history', label: 'History', icon: History },
+  { name: 'settings', label: 'Settings', icon: Settings },
+] as const;
+
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottom = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
-        tabBarActiveTintColor: '#059669',
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarStyle: [styles.tabBar, { height: 62 + bottom, paddingBottom: bottom }],
+        tabBarItemStyle: styles.tabBarItem,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon={LayoutDashboard} label="Dashboard" focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon={History} label="History" focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Settings} label="Settings" focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="about"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon={Info} label="About" focused={focused} />
-          ),
-        }}
-      />
+      {TABS.map((t) => (
+        <Tabs.Screen
+          key={t.name}
+          name={t.name}
+          options={{
+            title: t.label,
+            tabBarAccessibilityLabel: t.label,
+            tabBarIcon: ({ focused }) => <TabIcon icon={t.icon} label={t.label} focused={focused} />,
+          }}
+        />
+      ))}
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.steel,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    height: Platform.OS === 'ios' ? 88 : 74,
+    borderTopColor: Colors.line,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
-    ...Shadows.md,
+    elevation: 0,
+  },
+  tabBarItem: {
+    paddingHorizontal: 0,
   },
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
     gap: 3,
+    width: 74,
   },
-  tabItemActive: {
-    backgroundColor: '#ECFDF5',
+  lamp: {
+    width: 18,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'transparent',
+  },
+  lampOn: {
+    backgroundColor: Colors.straw,
   },
   tabLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: FontWeight.medium,
-    color: '#94A3B8',
-    letterSpacing: 0.1,
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: Colors.faint,
   },
   tabLabelActive: {
-    color: '#059669',
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
+    color: Colors.ink,
   },
 });

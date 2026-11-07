@@ -33,14 +33,22 @@ import {
   CheckCircle2,
   XCircle,
   Cpu,
+  ScanEye,
+  Info,
 } from 'lucide-react-native';
+import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp, SettingsSaveResult } from '../../hooks/useAppContext';
 import Card from '../../components/Card';
 import StatusBadge from '../../components/StatusBadge';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import ScreenHeader from '../../components/ScreenHeader';
+import ConnectionPill from '../../components/ConnectionPill';
+import { Segmented, SwitchRow } from '../../components/FormControls';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Shadows, Spacing } from '../../constants/theme';
 import { APP_CONFIG } from '../../constants/config';
-import { ConnectionStatus, FirebasePingResult } from '../../types';
+import { DetectorConfig, FirebasePingResult } from '../../types';
+import { detectorReady } from '../../services/detector';
+import { CALIBRATION_RUN_MS, rateFromTest } from '../../utils/travel';
 import { notify, confirmDestructive } from '../../utils/dialogs';
 
 interface SettingRowProps {
@@ -110,14 +118,6 @@ function NumberField({ label, value, onChangeText, placeholder, suffix }: Number
   );
 }
 
-const connectionBadge: Record<ConnectionStatus, { label: string; variant: 'success' | 'demo' | 'warning' | 'error' | 'neutral' }> = {
-  online: { label: 'Online', variant: 'success' },
-  connecting: { label: 'Connecting', variant: 'warning' },
-  offline: { label: 'Offline', variant: 'neutral' },
-  error: { label: 'Error', variant: 'error' },
-  demo: { label: 'Demo', variant: 'demo' },
-};
-
 type PingState = { status: 'idle' } | { status: 'testing' } | { status: 'done'; result: FirebasePingResult };
 
 function describeSave(what: string, result: SettingsSaveResult): string {
@@ -132,8 +132,6 @@ function parseNumber(text: string): number {
 
 export default function SettingsScreen() {
   const {
-    isDemoMode,
-    setDemoMode,
     firebaseConfig,
     setFirebaseConfig,
     testFirebaseConnection,
@@ -144,7 +142,17 @@ export default function SettingsScreen() {
     setSensorThresholds,
     cleaningSettings,
     setCleaningSettings,
+    detectorConfig,
+    setDetectorConfig,
+    jog,
   } = useApp();
+  const [measuredCm, setMeasuredCm] = useState('');
+
+  // AI detector (stored on this phone only)
+  const [detector, setDetector] = useState<DetectorConfig>(detectorConfig);
+  const [showApiKey, setShowApiKey] = useState(false);
+  useEffect(() => setDetector(detectorConfig), [detectorConfig]);
+  const detectorDirty = JSON.stringify(detector) !== JSON.stringify(detectorConfig);
 
   // Firebase connection inputs
   const [dbUrl, setDbUrl] = useState(firebaseConfig.databaseUrl);
@@ -158,7 +166,6 @@ export default function SettingsScreen() {
   const [ultrasonicWarning, setUltrasonicWarning] = useState(sensorThresholds.ultrasonic.warningDistanceCm.toString());
   const [ultrasonicCritical, setUltrasonicCritical] = useState(sensorThresholds.ultrasonic.criticalDistanceCm.toString());
   const [scraperRuntime, setScraperRuntime] = useState((cleaningSettings.maxScraperRuntimeMs / 1000).toString());
-  const [pumpDuration, setPumpDuration] = useState((cleaningSettings.pumpDurationMs / 1000).toString());
 
   // Keep inputs in sync once persisted settings finish loading
   useEffect(() => {
@@ -175,8 +182,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     setScraperRuntime((cleaningSettings.maxScraperRuntimeMs / 1000).toString());
-    setPumpDuration((cleaningSettings.pumpDurationMs / 1000).toString());
-  }, [cleaningSettings.maxScraperRuntimeMs, cleaningSettings.pumpDurationMs]);
+  }, [cleaningSettings.maxScraperRuntimeMs]);
 
   const inputConfig = { databaseUrl: dbUrl, authToken };
   const hasUnsavedConnection =
@@ -195,16 +201,6 @@ export default function SettingsScreen() {
     }
     await setFirebaseConfig(inputConfig);
     await runTest();
-  };
-
-  const handleSelectMode = async (live: boolean) => {
-    if (!live) {
-      setDemoMode(true);
-      return;
-    }
-    if (hasUnsavedConnection && dbUrl.trim()) await setFirebaseConfig(inputConfig);
-    setDemoMode(false);
-    if (dbUrl.trim()) await runTest();
   };
 
   const handleMQ135Save = async () => {
@@ -241,30 +237,37 @@ export default function SettingsScreen() {
 
   const handleTimingSave = async () => {
     const runtime = parseNumber(scraperRuntime);
-    const pump = parseNumber(pumpDuration);
     if (isNaN(runtime) || runtime < 1 || runtime > 120) {
-      notify('Invalid Value', 'Scraper runtime must be between 1 and 120 seconds.');
-      return;
-    }
-    if (isNaN(pump) || pump < 1 || pump > 60) {
-      notify('Invalid Value', 'Pump duration must be between 1 and 60 seconds.');
+      notify('Invalid Value', 'The safety cut-off must be between 1 and 120 seconds.');
       return;
     }
     const result = await setCleaningSettings({
       ...cleaningSettings,
       maxScraperRuntimeMs: Math.round(runtime * 1000),
-      pumpDurationMs: Math.round(pump * 1000),
     });
-    notify('Saved', describeSave('Cycle timing', result));
+    notify('Saved', describeSave('Safety cut-off', result));
   };
 
-  const handleClearDemoData = () => {
-    confirmDestructive('Clear Demo Data', 'This will reset all demo data. This action cannot be undone.', 'Clear', async () => {
-      try {
-        await AsyncStorage.removeItem(APP_CONFIG.storageKeys.history);
-        notify('Done', 'Demo data cleared.');
-      } catch {}
-    });
+  const handleCalibrate = async () => {
+    const cm = parseNumber(measuredCm);
+    if (isNaN(cm) || cm <= 0 || cm > 500) {
+      notify('Check the distance', 'Enter how many centimetres the scraper moved during the test.');
+      return;
+    }
+    const rate = Math.round(rateFromTest(cm, CALIBRATION_RUN_MS, cleaningSettings.scraperSpeedPercent) * 100) / 100;
+    const result = await setCleaningSettings({ ...cleaningSettings, travelCmPerSec: rate });
+    setMeasuredCm('');
+    notify('Saved', describeSave(`Travel rate ${rate} cm/s`, result));
+  };
+
+  const handleDetectorSave = async () => {
+    const problem = detectorReady(detector);
+    if (problem) {
+      notify('Check the detector', problem);
+      return;
+    }
+    await setDetectorConfig(detector);
+    notify('Saved', 'Detector settings saved on this phone. Open the Camera Station to use them.');
   };
 
   const handleResetSettings = () => {
@@ -281,25 +284,10 @@ export default function SettingsScreen() {
     );
   };
 
-  const badge = connectionBadge[connectionStatus];
-
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.ambientGlow} />
-        <View style={styles.headerTop}>
-          <View style={styles.headerContent}>
-            <View style={styles.logoContainer}>
-              <SettingsIcon size={20} color="#10B981" strokeWidth={2.5} />
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>System Settings</Text>
-              <Text style={styles.headerSubtitle}>Hardware link, thresholds & operating limits</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      <ScreenHeader title="Settings" subtitle="Connection, sensors, camera and safety." right={<ConnectionPill status={connectionStatus} />} />
 
       <ScrollView
         style={styles.scroll}
@@ -308,39 +296,10 @@ export default function SettingsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Firebase Hardware Connection */}
-        <Card
-          title="Hardware Connection"
-          subtitle="ESP32 ↔ Firebase Realtime Database"
-          icon={<Database size={18} color={Colors.primary} />}
-          headerRight={<StatusBadge label={badge.label} variant={badge.variant} size="sm" />}
-        >
-          <View style={styles.segment}>
-            <TouchableOpacity
-              style={[styles.segmentBtn, isDemoMode && styles.segmentBtnDemo]}
-              onPress={() => handleSelectMode(false)}
-              activeOpacity={0.8}
-            >
-              <FlaskConical size={15} color={isDemoMode ? '#FFFFFF' : Colors.textSecondary} />
-              <Text style={[styles.segmentText, isDemoMode && styles.segmentTextActive]}>Demo Mode</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.segmentBtn, !isDemoMode && styles.segmentBtnLive]}
-              onPress={() => handleSelectMode(true)}
-              activeOpacity={0.8}
-            >
-              <Cpu size={15} color={!isDemoMode ? '#FFFFFF' : Colors.textSecondary} />
-              <Text style={[styles.segmentText, !isDemoMode && styles.segmentTextActive]}>Live Hardware</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.helpText}>
-            {isDemoMode
-              ? 'Simulated sensors and actuators. No commands reach the hardware.'
-              : 'Telemetry streams live from /system. Controls write to /system/controls and /system/manualCleanTrigger.'}
-          </Text>
-
-          {!isDemoMode && connectionError && (
+        <Card title="Sweeper connection" subtitle="The ESP32 and this app meet in your Firebase Realtime Database.">
+          {connectionError && (
             <View style={styles.errorBox}>
-              <XCircle size={14} color="#B91C1C" />
+              <XCircle size={14} color={Colors.errorDark} />
               <Text style={styles.errorBoxText}>{connectionError}</Text>
             </View>
           )}
@@ -379,7 +338,7 @@ export default function SettingsScreen() {
               {showToken ? <EyeOff size={18} color={Colors.textSecondary} /> : <Eye size={18} color={Colors.textSecondary} />}
             </TouchableOpacity>
           </View>
-          <Text style={styles.helpText}>Sent as the ?auth= query parameter on every REST request.</Text>
+          <Text style={styles.helpText}>Only needed if your database rules require it.</Text>
 
           <View style={styles.buttonRow}>
             <TouchableOpacity
@@ -392,11 +351,11 @@ export default function SettingsScreen() {
               ) : (
                 <Zap size={16} color={Colors.primary} />
               )}
-              <Text style={styles.secondaryBtnText}>Test Connection</Text>
+              <Text style={styles.secondaryBtnText}>Test</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveConnection}>
               <Wifi size={16} color="#FFFFFF" />
-              <Text style={styles.primaryBtnText}>{hasUnsavedConnection ? 'Save & Connect' : 'Reconnect'}</Text>
+              <Text style={styles.primaryBtnText}>{hasUnsavedConnection ? 'Save and connect' : 'Reconnect'}</Text>
             </TouchableOpacity>
           </View>
 
@@ -404,14 +363,14 @@ export default function SettingsScreen() {
             <View style={[styles.pingResult, ping.result.ok ? styles.pingOk : styles.pingFail]}>
               {ping.result.ok ? <CheckCircle2 size={16} color={Colors.success} /> : <XCircle size={16} color={Colors.error} />}
               <View style={{ flex: 1 }}>
-                <Text style={[styles.pingTitle, { color: ping.result.ok ? '#047857' : '#B91C1C' }]}>
-                  {ping.result.ok ? `Reachable · ${ping.result.latencyMs} ms` : 'Connection failed'}
+                <Text style={[styles.pingTitle, { color: ping.result.ok ? Colors.primaryDark : Colors.errorDark }]}>
+                  {ping.result.ok ? `Reached in ${ping.result.latencyMs} ms` : 'Could not connect'}
                 </Text>
                 <Text style={styles.pingDetail}>
                   {ping.result.ok
                     ? ping.result.hasSystemNode
-                      ? '/system node found. The ESP32 has published data.'
-                      : 'Database reachable, but /system is empty. Power on the ESP32 to publish telemetry.'
+                      ? 'The sweeper has sent data. You are ready to go.'
+                      : 'The database answers, but the sweeper has not sent anything yet. Power on the ESP32.'
                     : ping.result.error}
                 </Text>
               </View>
@@ -420,30 +379,28 @@ export default function SettingsScreen() {
         </Card>
 
         {/* Device */}
-        <Card title="Device" icon={<Cpu size={18} color={Colors.primary} />}>
-          <SettingRow label="Device Name" value={deviceStatus.deviceInfo.name} />
-          <SettingRow label={isDemoMode ? 'Device ID' : 'Database'} value={deviceStatus.deviceInfo.deviceId} />
+        <Card title="Device">
+          <SettingRow label="Device name" value={deviceStatus.deviceInfo.name} />
+          <SettingRow label="Database" value={deviceStatus.deviceInfo.deviceId} />
           <SettingRow label="Firmware" value={deviceStatus.deviceInfo.firmwareVersion || 'Unknown'} />
           <SettingRow
-            label="Last Communication"
+            label="Last heard from"
             value={
               deviceStatus.lastCommunicationTime
                 ? new Date(deviceStatus.lastCommunicationTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                : isDemoMode
-                ? 'Simulated'
                 : 'No data yet'
             }
           />
         </Card>
 
         {/* MQ-135 Settings */}
-        <Card title="Ammonia Gas Sensor" subtitle="MQ-135 · estimated PPM" icon={<Wind size={18} color={Colors.primary} />}>
+        <Card title="Ammonia sensor" subtitle="MQ-135, estimated ppm">
           <View style={styles.fieldRow}>
             <NumberField label="Warning at" value={mq135Warning} onChangeText={setMQ135Warning} placeholder="20" suffix="ppm" />
             <NumberField label="Danger at" value={mq135Critical} onChangeText={setMQ135Critical} placeholder="50" suffix="ppm" />
           </View>
           <TouchableOpacity style={[styles.primaryBtn, styles.saveFull]} onPress={handleMQ135Save}>
-            <Text style={styles.primaryBtnText}>Save Thresholds</Text>
+            <Text style={styles.primaryBtnText}>Save</Text>
           </TouchableOpacity>
           <Text style={styles.helpText}>
             The firmware maps the 12-bit ADC linearly to 0–100 PPM. Values are estimates until the sensor is calibrated (Rs/Ro curve).
@@ -452,7 +409,7 @@ export default function SettingsScreen() {
         </Card>
 
         {/* HC-SR04 Settings */}
-        <Card title="Waste Bin Level" subtitle="HC-SR04 ultrasonic" icon={<Radar size={18} color={Colors.primary} />}>
+        <Card title="Waste bin level" subtitle="HC-SR04 above the bin">
           <SettingRow
             label="Bin Depth (reference)"
             value={`${sensorThresholds.ultrasonic.referenceDistanceCm} cm`}
@@ -463,98 +420,147 @@ export default function SettingsScreen() {
             <NumberField label="Full at ≤" value={ultrasonicCritical} onChangeText={setUltrasonicCritical} placeholder="5" suffix="cm" />
           </View>
           <TouchableOpacity style={[styles.primaryBtn, styles.saveFull]} onPress={handleUltrasonicSave}>
-            <Text style={styles.primaryBtnText}>Save Thresholds</Text>
+            <Text style={styles.primaryBtnText}>Save</Text>
           </TouchableOpacity>
         </Card>
 
-        {/* Cleaning Settings */}
-        <Card title="Cleaning System" icon={<Cog size={18} color={Colors.primary} />}>
-          <SettingRow
-            label="Operating Mode"
-            value={cleaningSettings.mode.charAt(0).toUpperCase() + cleaningSettings.mode.slice(1)}
-            description="Automatic mode requires ESP32 firmware support. The mobile app does not initiate automatic cycles independently."
-          />
-          <SettingRow
-            label="Require Confirmation"
-            description="Ask before starting a cycle or turning on the pump."
-            rightElement={
-              <Switch
-                value={cleaningSettings.requireConfirmation}
-                onValueChange={(v) => {
-                  void setCleaningSettings({ ...cleaningSettings, requireConfirmation: v });
-                }}
-                trackColor={{ false: Colors.disabled, true: Colors.accentLight }}
-                thumbColor={cleaningSettings.requireConfirmation ? Colors.primary : '#f4f3f4'}
-              />
-            }
-          />
-          <SettingRow
-            label="Limit Switch Monitoring"
-            rightElement={
-              <Switch
-                value={cleaningSettings.limitSwitchMonitoring}
-                onValueChange={(v) => {
-                  void setCleaningSettings({ ...cleaningSettings, limitSwitchMonitoring: v });
-                }}
-                trackColor={{ false: Colors.disabled, true: Colors.accentLight }}
-                thumbColor={cleaningSettings.limitSwitchMonitoring ? Colors.primary : '#f4f3f4'}
-              />
-            }
-          />
+        {/* Scraper travel */}
+        <Card title="Scraper travel" subtitle="Distance is set by run time, so measure your build once.">
+          <Text style={styles.calibrationRate}>{cleaningSettings.travelCmPerSec.toFixed(2)} cm/s</Text>
+          <Text style={styles.helpText}>
+            Travel rate at full speed. The app turns every distance into a run time with it.
+          </Text>
+          <Text style={styles.stepText}>1. Mark where the scraper is, then run a {CALIBRATION_RUN_MS / 1000}-second test at the current speed ({cleaningSettings.scraperSpeedPercent}%).</Text>
+          <TouchableOpacity
+            style={[styles.secondaryBtn, styles.saveFull, connectionStatus !== 'online' && styles.btnDisabled]}
+            onPress={() => jog('forward', 0, CALIBRATION_RUN_MS)}
+            disabled={connectionStatus !== 'online'}
+          >
+            <Text style={styles.secondaryBtnText}>Run {CALIBRATION_RUN_MS / 1000}-second test toward the bin</Text>
+          </TouchableOpacity>
+          <Text style={styles.stepText}>2. Measure how far it moved and enter it.</Text>
+          <View style={styles.fieldRow}>
+            <NumberField label="It moved" value={measuredCm} onChangeText={setMeasuredCm} placeholder="18.5" suffix="cm" />
+          </View>
+          <TouchableOpacity style={[styles.primaryBtn, styles.saveFull]} onPress={handleCalibrate}>
+            <Text style={styles.primaryBtnText}>Save travel rate</Text>
+          </TouchableOpacity>
+          <Text style={styles.helpText}>Measure again if you change the belt, pulley or motor, or if strokes stop short or run long.</Text>
 
-          <View style={[styles.fieldRow, { marginTop: Spacing.md }]}>
-            <NumberField label="Max scraper runtime" value={scraperRuntime} onChangeText={setScraperRuntime} placeholder="15" suffix="s" />
-            <NumberField label="Pump duration" value={pumpDuration} onChangeText={setPumpDuration} placeholder="5" suffix="s" />
+          <View style={[styles.fieldRow, { marginTop: Spacing.lg }]}>
+            <NumberField label="Safety cut-off" value={scraperRuntime} onChangeText={setScraperRuntime} placeholder="15" suffix="s" />
           </View>
           <TouchableOpacity style={[styles.primaryBtn, styles.saveFull]} onPress={handleTimingSave}>
-            <Text style={styles.primaryBtnText}>Save Cycle Timing</Text>
+            <Text style={styles.primaryBtnText}>Save cut-off</Text>
           </TouchableOpacity>
-          <Text style={styles.helpText}>Written to /system/config/maxScraperRuntimeMs and pumpDurationMs in live mode.</Text>
+          <Text style={styles.helpText}>The motor never runs longer than this in one go, whatever distance is set.</Text>
 
-          <SettingRow
-            label="Cooldown Between Cycles"
-            value={`${cleaningSettings.cooldownMs / 1000}s`}
-          />
-          <SettingRow
-            label="Emergency Stop"
-            icon={<Shield size={16} color={Colors.error} />}
-            rightElement={
-              <Switch
-                value={cleaningSettings.emergencyStopEnabled}
-                onValueChange={(v) => {
-                  void setCleaningSettings({ ...cleaningSettings, emergencyStopEnabled: v });
-                }}
-                trackColor={{ false: Colors.disabled, true: Colors.errorLight }}
-                thumbColor={cleaningSettings.emergencyStopEnabled ? Colors.error : '#f4f3f4'}
-              />
-            }
-            description="When enabled, the emergency stop button is visible on the Dashboard."
+          <SwitchRow
+            label="Ask before starting"
+            description="Confirm before a manual cycle or turning on the pump."
+            value={cleaningSettings.requireConfirmation}
+            onChange={(v) => void setCleaningSettings({ ...cleaningSettings, requireConfirmation: v })}
+            last
           />
         </Card>
 
-        {/* Notification Preferences */}
-        <Card title="Notifications" icon={<Bell size={18} color={Colors.primary} />}>
-          <Text style={styles.helpText}>
-            In-app notifications are displayed within AgriSweep. Push notifications require additional backend setup.
-          </Text>
-          <SettingRow label="Elevated Gas Reading" rightElement={<Switch value={true} disabled trackColor={{ false: Colors.disabled, true: Colors.accentLight }} thumbColor={Colors.primary} />} />
-          <SettingRow label="Accumulation Threshold" rightElement={<Switch value={true} disabled trackColor={{ false: Colors.disabled, true: Colors.accentLight }} thumbColor={Colors.primary} />} />
-          <SettingRow label="Cleaning Completed" rightElement={<Switch value={true} disabled trackColor={{ false: Colors.disabled, true: Colors.accentLight }} thumbColor={Colors.primary} />} />
-          <SettingRow label="Cleaning Failed" rightElement={<Switch value={true} disabled trackColor={{ false: Colors.disabled, true: Colors.accentLight }} thumbColor={Colors.primary} />} />
-          <SettingRow label="Device Disconnected" rightElement={<Switch value={true} disabled trackColor={{ false: Colors.disabled, true: Colors.accentLight }} thumbColor={Colors.primary} />} />
+        {/* AI detector */}
+        <Card title="Camera detector" subtitle="Used by the camera phone. Stored on this phone only.">
+          <Segmented
+            value={detector.provider}
+            onChange={(provider) => setDetector({ ...detector, provider })}
+            options={[
+              { value: 'simulated', label: 'Test detector' },
+              { value: 'roboflow', label: 'Roboflow model' },
+            ]}
+          />
+          {detector.provider === 'simulated' ? (
+            <Text style={styles.helpText}>
+              Pretends to see droppings when you switch it on in the camera screen. Use it to try your trigger settings before a model is trained.
+            </Text>
+          ) : (
+            <>
+              <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Model ID</Text>
+              <TextInput
+                style={styles.textInput}
+                value={detector.modelId}
+                onChangeText={(modelId) => setDetector({ ...detector, modelId })}
+                placeholder="chicken-droppings/1"
+                placeholderTextColor={Colors.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>API key</Text>
+              <View style={styles.tokenRow}>
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  value={detector.apiKey}
+                  onChangeText={(apiKey) => setDetector({ ...detector, apiKey })}
+                  placeholder="Roboflow private API key"
+                  placeholderTextColor={Colors.textTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry={!showApiKey}
+                />
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowApiKey((v) => !v)}>
+                  {showApiKey ? <EyeOff size={18} color={Colors.textSecondary} /> : <Eye size={18} color={Colors.textSecondary} />}
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.fieldRow, { marginTop: Spacing.md }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Class name</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={detector.targetClass}
+                    onChangeText={(targetClass) => setDetector({ ...detector, targetClass })}
+                    placeholder="poop"
+                    placeholderTextColor={Colors.textTertiary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+              <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>Endpoint</Text>
+              <TextInput
+                style={styles.textInput}
+                value={detector.endpoint}
+                onChangeText={(endpoint) => setDetector({ ...detector, endpoint })}
+                placeholder="https://detect.roboflow.com"
+                placeholderTextColor={Colors.textTertiary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              <Text style={styles.helpText}>
+                Train an object-detection model on photos of the cage floor, label droppings with the class name above, then paste the
+                model ID (project/version) and API key here. The key never leaves this phone.
+              </Text>
+            </>
+          )}
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.saveFull, !detectorDirty && styles.btnDisabled]}
+            onPress={handleDetectorSave}
+            disabled={!detectorDirty}
+          >
+            <Text style={styles.primaryBtnText}>{detectorDirty ? 'Save detector' : 'Saved'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.secondaryBtn, styles.saveFull]} onPress={() => router.push('/station')}>
+            <ScanEye size={16} color={Colors.primary} />
+            <Text style={styles.secondaryBtnText}>Open camera screen</Text>
+          </TouchableOpacity>
         </Card>
 
         {/* Application Settings */}
-        <Card title="Application" icon={<Smartphone size={18} color={Colors.primary} />}>
-          <SettingRow label="App Version" value={APP_CONFIG.version} />
+        <Card title="Application">
           <SettingRow
-            label="Clear Demo Data"
-            icon={<Trash2 size={16} color={Colors.error} />}
-            onPress={handleClearDemoData}
-            danger
+            label="About AgriSweep"
+            description="Project, hardware and ESP32 wiring map"
+            icon={<Info size={16} color={Colors.primary} />}
+            onPress={() => router.push('/about')}
           />
+          <SettingRow label="App version" value={APP_CONFIG.version} />
           <SettingRow
-            label="Reset All Settings"
+            label="Reset all settings"
             icon={<RotateCcw size={16} color={Colors.error} />}
             onPress={handleResetSettings}
             danger
@@ -572,95 +578,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: 54,
-    paddingBottom: Spacing.xl,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
-    position: 'relative',
-    ...Shadows.md,
-  },
-  ambientGlow: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  logoContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
-  headerSubtitle: {
-    fontSize: FontSize.xs,
-    color: 'rgba(255, 255, 255, 0.70)',
-    fontWeight: FontWeight.medium,
-    marginTop: 2,
-  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     padding: Spacing.lg,
-  },
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: Colors.borderLight,
-    borderRadius: 14,
-    padding: 4,
-    gap: 4,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  segmentBtnDemo: {
-    backgroundColor: Colors.demo,
-    ...Shadows.sm,
-  },
-  segmentBtnLive: {
-    backgroundColor: Colors.primary,
-    ...Shadows.glow,
-  },
-  segmentText: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
-    color: Colors.textSecondary,
-  },
-  segmentTextActive: {
-    color: '#FFFFFF',
   },
   errorBox: {
     flexDirection: 'row',
@@ -668,7 +590,7 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: Colors.errorLight,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: 'rgba(181, 52, 43, 0.3)',
     borderRadius: BorderRadius.md,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
@@ -677,15 +599,14 @@ const styles = StyleSheet.create({
   errorBoxText: {
     flex: 1,
     fontSize: FontSize.xs,
-    color: '#B91C1C',
-    fontWeight: FontWeight.semibold,
+    color: Colors.errorDark,
+    fontFamily: Fonts.bold,
   },
   fieldLabel: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.textSecondary,
     marginBottom: 6,
-    textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   textInput: {
@@ -697,7 +618,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     fontSize: FontSize.sm,
     color: Colors.text,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   tokenRow: {
     flexDirection: 'row',
@@ -731,7 +652,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
   },
   secondaryBtn: {
     flex: 1,
@@ -739,7 +660,7 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: Colors.primarySurface,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(47, 90, 69, 0.35)',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -748,7 +669,7 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: Colors.primaryDark,
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
   },
   btnDisabled: {
     opacity: 0.6,
@@ -768,17 +689,18 @@ const styles = StyleSheet.create({
   },
   pingOk: {
     backgroundColor: Colors.successLight,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(47, 90, 69, 0.3)',
   },
   pingFail: {
     backgroundColor: Colors.errorLight,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: 'rgba(181, 52, 43, 0.3)',
   },
   pingTitle: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
   },
   pingDetail: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     marginTop: 2,
@@ -805,12 +727,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: FontSize.md,
     color: Colors.text,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
   },
   suffix: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
   },
   settingRow: {
     flexDirection: 'row',
@@ -833,26 +755,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: Colors.primarySurface,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: 'rgba(47, 90, 69, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   settingIconDanger: {
     backgroundColor: Colors.errorLight,
-    borderColor: 'rgba(239, 68, 68, 0.25)',
+    borderColor: 'rgba(181, 52, 43, 0.25)',
   },
   settingTextContainer: {
     flex: 1,
   },
   settingLabel: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
   },
   settingLabelDanger: {
-    color: '#DC2626',
+    color: Colors.error,
   },
   settingDescription: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     marginTop: 2,
@@ -868,9 +791,22 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     maxWidth: 170,
     textAlign: 'right',
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
+  },
+  calibrationRate: {
+    fontFamily: Fonts.display,
+    fontSize: FontSize.xxxl,
+    color: Colors.ink,
+  },
+  stepText: {
+    fontFamily: Fonts.bold,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+    color: Colors.ink,
+    marginTop: Spacing.md,
   },
   helpText: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     lineHeight: 18,

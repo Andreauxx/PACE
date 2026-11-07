@@ -2,7 +2,7 @@
 // AgriSweep — Device Type Definitions
 // ============================================================
 
-export type ConnectionStatus = 'online' | 'connecting' | 'offline' | 'error' | 'demo';
+export type ConnectionStatus = 'online' | 'connecting' | 'offline' | 'error';
 
 export type OperatingMode = 'automatic' | 'manual';
 
@@ -22,16 +22,10 @@ export type CleaningCycleStage =
 
 export type CommandStatus = 'pending' | 'acknowledged' | 'rejected' | 'timeout';
 
-export interface LimitSwitchState {
-  forward: boolean;
-  reverse: boolean;
-}
-
 export interface ScraperState {
   running: boolean;
   direction: ScraperDirection;
   stage: CleaningCycleStage;
-  limitSwitches: LimitSwitchState;
   lastCommand: string | null;
   lastCommandTime: number | null;
   fault: string | null;

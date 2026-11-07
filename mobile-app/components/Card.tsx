@@ -1,10 +1,11 @@
 // ============================================================
-// AgriSweep — Modern Card Component
+// AgriSweep — Panel
+// Flat steel panel. Hierarchy comes from fill, not shadow.
 // ============================================================
 
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../constants/theme';
+import { Colors, Fonts, FontSize, Spacing, BorderRadius } from '../constants/theme';
 
 interface CardProps {
   title?: string;
@@ -19,10 +20,10 @@ interface CardProps {
 export default function Card({ title, subtitle, icon, headerRight, children, style, noPadding }: CardProps) {
   return (
     <View style={[styles.card, style]}>
-      {(title || icon || headerRight) && (
+      {(title || headerRight) && (
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            {icon && <View style={styles.iconContainer}>{icon}</View>}
+            {icon ? <View style={styles.icon}>{icon}</View> : null}
             <View style={{ flex: 1 }}>
               {title && <Text style={styles.title}>{title}</Text>}
               {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -38,48 +39,40 @@ export default function Card({ title, subtitle, icon, headerRight, children, sty
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.sm,
-    marginBottom: Spacing.lg,
+    backgroundColor: Colors.steel,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
   },
   headerLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
     flex: 1,
   },
-  iconContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  icon: {
+    marginTop: 1,
   },
   title: {
+    fontFamily: Fonts.bold,
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
-    color: Colors.text,
-    letterSpacing: -0.2,
+    lineHeight: 21,
+    color: Colors.ink,
   },
   subtitle: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
-    color: Colors.textTertiary,
+    lineHeight: 17,
+    color: Colors.faint,
     marginTop: 1,
-    fontWeight: FontWeight.medium,
   },
   content: {
     paddingHorizontal: Spacing.lg,

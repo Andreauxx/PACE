@@ -25,23 +25,21 @@ export interface CleaningStageRecord {
   status: 'completed' | 'failed' | 'skipped';
 }
 
-export interface CleaningSchedule {
-  enabled: boolean;
-  intervalHours: number;
-  startTime: string; // HH:mm
-  daysOfWeek: number[]; // 0=Sun, 6=Sat
-}
-
 export interface CleaningSettings {
-  mode: CleaningMode;
-  schedule: CleaningSchedule;
+  /** Scraper motor PWM duty, 0–100 %. Applies to cycles and jog. */
+  scraperSpeedPercent: number;
+  /** How far one cleaning stroke travels toward the bin (and back). */
+  strokeDistanceCm: number;
+  /** How far one press of a jog button moves the scraper. */
+  jogDistanceCm: number;
+  /** Measured travel rate at 100 % speed; converts distance into run time. */
+  travelCmPerSec: number;
+  /** Backup cut-off: the motor never runs longer than this in one go. */
   maxScraperRuntimeMs: number;
   pumpDurationMs: number;
-  motorTimeoutMs: number;
-  cooldownMs: number;
-  limitSwitchMonitoring: boolean;
+  /** Run the water pump automatically after each sweep. */
+  rinseAfterSweep: boolean;
   requireConfirmation: boolean;
-  emergencyStopEnabled: boolean;
 }
 
 export interface CleaningStats {

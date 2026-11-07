@@ -24,10 +24,11 @@ import {
 } from 'lucide-react-native';
 import { useApp } from '../../hooks/useAppContext';
 import Card from '../../components/Card';
+import ScreenHeader from '../../components/ScreenHeader';
 import SensorChart from '../../components/SensorChart';
 import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Shadows, Spacing } from '../../constants/theme';
 import { CleaningCycle, CleaningStatus, EventLogEntry, EventSeverity, EventType, TimeRange } from '../../types';
 import { cleaningCyclesToCsv, csvFilename, eventLogToCsv, exportCsv } from '../../utils/csv';
 import { notify } from '../../utils/dialogs';
@@ -84,7 +85,6 @@ const eventIcons: Record<EventType, IconComponent> = {
   cleaning_failed: XCircle,
   pump_activated: Droplets,
   pump_deactivated: Droplets,
-  scraper_limit_reached: Cog,
   motor_timeout: AlertTriangle,
   actuator_fault: XCircle,
   settings_changed: Activity,
@@ -101,7 +101,6 @@ const severityColors: Record<EventSeverity, string> = {
 
 export default function HistoryScreen() {
   const {
-    isDemoMode,
     mq135History,
     ultrasonicHistory,
     cleaningHistory,
@@ -157,26 +156,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.ambientGlow} />
-        <View style={styles.headerTop}>
-          <View style={styles.headerContent}>
-            <View style={styles.logoContainer}>
-              <HistoryIcon size={20} color="#10B981" strokeWidth={2.5} />
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>History & Analytics</Text>
-              <Text style={styles.headerSubtitle}>Telemetry logs & trend analysis</Text>
-            </View>
-          </View>
-          {isDemoMode && (
-            <View style={styles.demoBadge}>
-              <Text style={styles.demoText}>SIMULATED</Text>
-            </View>
-          )}
-        </View>
-      </View>
+      <ScreenHeader title="History" subtitle="Readings, cleaning cycles and events." />
 
       {/* Segmented Tab Pill Bar */}
       <View style={styles.tabBarWrapper}>
@@ -413,72 +393,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: Spacing.xl,
-    paddingTop: 54,
-    paddingBottom: Spacing.xl,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
-    position: 'relative',
-    ...Shadows.md,
-  },
-  ambientGlow: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  logoContainer: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: FontSize.xl,
-    fontWeight: FontWeight.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.2,
-  },
-  headerSubtitle: {
-    fontSize: FontSize.xs,
-    color: 'rgba(255, 255, 255, 0.70)',
-    fontWeight: FontWeight.medium,
-    marginTop: 2,
-  },
-  demoBadge: {
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(192, 132, 252, 0.3)',
-  },
-  demoText: {
-    fontSize: 9,
-    fontWeight: FontWeight.bold,
-    color: '#E9D5FF',
-    letterSpacing: 0.8,
-  },
   tabBarWrapper: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -486,7 +400,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0',
+    backgroundColor: Colors.border,
     borderRadius: 14,
     padding: 4,
   },
@@ -502,12 +416,12 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: '#64748B',
+    fontFamily: Fonts.bold,
+    color: Colors.textTertiary,
   },
   tabTextActive: {
-    color: '#059669',
-    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+    fontFamily: Fonts.bold,
   },
   scroll: {
     flex: 1,
@@ -526,23 +440,24 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
     ...Shadows.sm,
   },
   timeRangeBtnActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: Colors.primarySurface,
+    borderColor: 'rgba(47, 90, 69, 0.35)',
   },
   timeRangeText: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: '#64748B',
+    fontFamily: Fonts.bold,
+    color: Colors.textTertiary,
   },
   timeRangeTextActive: {
-    color: '#047857',
-    fontWeight: FontWeight.bold,
+    color: Colors.primaryDark,
+    fontFamily: Fonts.bold,
   },
   chartHint: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     textAlign: 'center',
@@ -556,7 +471,7 @@ const styles = StyleSheet.create({
   },
   exportCount: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.textSecondary,
   },
   exportBtn: {
@@ -576,18 +491,15 @@ const styles = StyleSheet.create({
   },
   exportText: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: '#FFFFFF',
   },
   // Cleaning cycle card
   cycleCard: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 14,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
-    ...Shadows.sm,
   },
   cycleHeader: {
     flexDirection: 'row',
@@ -602,18 +514,18 @@ const styles = StyleSheet.create({
   },
   cycleTime: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
   },
   cycleDetails: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.md,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.sunken,
     borderRadius: 14,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: Colors.borderLight,
   },
   cycleDetail: {
     minWidth: '40%',
@@ -623,25 +535,25 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     marginBottom: 2,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   cycleDetailValue: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
   },
   errorBar: {
     marginTop: Spacing.md,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.errorLight,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: 'rgba(181, 52, 43, 0.3)',
     padding: Spacing.sm,
     borderRadius: BorderRadius.sm,
   },
   errorText: {
     fontSize: FontSize.xs,
-    color: '#B91C1C',
-    fontWeight: FontWeight.semibold,
+    color: Colors.errorDark,
+    fontFamily: Fonts.bold,
   },
   // Event card
   eventCard: {
@@ -650,7 +562,7 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.borderLight,
   },
   eventIconBox: {
     width: 32,
@@ -665,7 +577,7 @@ const styles = StyleSheet.create({
   eventMessage: {
     fontSize: FontSize.sm,
     color: Colors.text,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
     marginBottom: 3,
   },
   eventMeta: {
@@ -673,10 +585,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eventTime: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
   },
   eventSource: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
   },
@@ -689,24 +603,24 @@ const styles = StyleSheet.create({
   analyticsStat: {
     flex: 1,
     minWidth: '40%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: Colors.sunken,
     padding: Spacing.md,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: Colors.border,
     alignItems: 'center',
     gap: 4,
     ...Shadows.sm,
   },
   analyticsValue: {
     fontSize: FontSize.xl,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: Colors.text,
   },
   analyticsLabel: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   // Daily activity
   dayRow: {
@@ -716,6 +630,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   dayLabel: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.xs,
     color: Colors.textSecondary,
     width: 80,
@@ -734,7 +649,7 @@ const styles = StyleSheet.create({
   },
   dayCount: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     width: 24,
     textAlign: 'right',

@@ -1,9 +1,93 @@
 {
   "system": {
-    "ammoniaLevel": 12.5,
-    "binCapacity": 75,
     "status": "Idle",
+    "ammoniaRaw": 0,
+    "ammoniaLevel": 0,
+    "distanceCm": 45.0,
+    "binCapacity": 0,
+    "lastUpdated": 0,
+    "lastCleaningCycleTime": 0,
     "manualCleanTrigger": false,
-    "lastUpdated": 1690000000000
+    "lastTrigger": {
+      "source": "manual",
+      "at": 0,
+      "detail": null
+    },
+    "scraper": {
+      "running": false,
+      "direction": "stopped",
+      "stage": "idle",
+      "fault": null
+    },
+    "pump": {
+      "active": false,
+      "runtimeMs": 0,
+      "fault": null
+    },
+    "controls": {
+      "jog": null,
+      "manualPumpTrigger": false,
+      "emergencyStop": false
+    },
+    "config": {
+      "scraperSpeedPercent": 70,
+      "strokeDistanceCm": 84,
+      "strokeTimeMs": 22600,
+      "jogDistanceCm": 10,
+      "travelCmPerSec": 5.3,
+      "maxScraperRuntimeMs": 35000,
+      "pumpDurationMs": 5000,
+      "rinseAfterSweep": false,
+      "ammoniaWarningThreshold": 20.0,
+      "binWarningDistanceCm": 15.0
+    },
+    "automation": {
+      "mode": "manual",
+      "cooldownMin": 30,
+      "schedule": {
+        "enabled": false,
+        "slots": [
+          {
+            "id": "slot-morning",
+            "time": "06:00",
+            "enabled": true
+          },
+          {
+            "id": "slot-evening",
+            "time": "18:00",
+            "enabled": true
+          }
+        ],
+        "daysOfWeek": [0, 1, 2, 3, 4, 5, 6]
+      },
+      "ai": {
+        "enabled": false,
+        "minConfidencePercent": 60,
+        "minDetections": 2,
+        "minCoveragePercent": 20,
+        "consecutiveFrames": 3,
+        "captureIntervalSec": 5
+      },
+      "sensors": {
+        "ammoniaEnabled": false,
+        "ammoniaPpm": 35,
+        "pauseWhenBinFull": false
+      }
+    },
+    "automationState": {
+      "lastAutoTriggerAt": null,
+      "lastScheduleKey": null
+    },
+    "vision": {
+      "online": false,
+      "lastSeen": null,
+      "lastFrameAt": null,
+      "detections": 0,
+      "maxConfidence": 0,
+      "coveragePercent": 0,
+      "streak": 0,
+      "provider": "simulated",
+      "error": null
+    }
   }
 }

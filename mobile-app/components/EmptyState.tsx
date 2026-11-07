@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Inbox } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Spacing } from '../constants/theme';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
@@ -32,11 +32,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
     color: Colors.textSecondary,
     textAlign: 'center',
   },
   message: {
+    fontFamily: Fonts.regular,
     fontSize: FontSize.sm,
     color: Colors.textTertiary,
     textAlign: 'center',

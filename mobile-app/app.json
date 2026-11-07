@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "mobile-app",
-    "slug": "mobile-app",
+    "name": "AgriSweep",
+    "slug": "agrisweep",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobileapp",
-    "userInterfaceStyle": "automatic",
+    "scheme": "agrisweep",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
@@ -21,7 +21,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -31,7 +31,14 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#064E3B"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "AgriSweep uses the camera to watch the cage floor and detect droppings.",
+          "recordAudioAndroid": false
         }
       ]
     ],

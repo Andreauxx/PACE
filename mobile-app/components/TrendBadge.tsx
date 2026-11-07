@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
-import { FontSize, FontWeight, BorderRadius } from '../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts } from '../constants/theme';
 import { Trend } from '../utils/sensors';
 
 interface TrendBadgeProps {
@@ -14,9 +14,9 @@ interface TrendBadgeProps {
   risingIsBad?: boolean;
 }
 
-const BAD = { bg: '#FFFBEB', border: 'rgba(245, 158, 11, 0.3)', icon: '#D97706', text: '#B45309' };
-const GOOD = { bg: '#ECFDF5', border: 'rgba(16, 185, 129, 0.3)', icon: '#059669', text: '#047857' };
-const NEUTRAL = { bg: '#F8FAFC', border: 'rgba(148, 163, 184, 0.25)', icon: '#64748B', text: '#64748B' };
+const BAD = { bg: Colors.warningLight, border: 'rgba(185, 127, 14, 0.3)', icon: Colors.warningDark, text: Colors.warningDark };
+const GOOD = { bg: Colors.primarySurface, border: 'rgba(47, 90, 69, 0.3)', icon: Colors.primary, text: Colors.primaryDark };
+const NEUTRAL = { bg: Colors.sunken, border: 'rgba(105, 115, 109, 0.25)', icon: Colors.textTertiary, text: Colors.textTertiary };
 
 export default function TrendBadge({ trend, risingIsBad = false }: TrendBadgeProps) {
   const label = trend === 'rising' ? 'Rising' : trend === 'falling' ? 'Falling' : trend === 'stable' ? 'Stable' : 'No trend';
@@ -44,6 +44,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
   },
 });

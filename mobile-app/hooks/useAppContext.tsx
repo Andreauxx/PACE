@@ -1,15 +1,13 @@
 // ============================================================
 // AgriSweep — App Context
 // Central state management for device status, sensor readings,
-// demo / live mode, and settings across all screens.
+// and settings across all screens.
 //
-// Demo mode  → demoService (simulated, never reaches hardware)
 // Live mode  → firebaseService (ESP32 via Firebase RTDB)
 // ============================================================
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { demoService } from '../services/demoService';
 import { firebaseService, normalizeDatabaseUrl } from '../services/firebaseService';
 import { APP_CONFIG } from '../constants/config';
 import {
@@ -22,6 +20,9 @@ import {
   BIN_MAX_DEPTH_CM,
 } from '../utils/sensors';
 import { computeAnalytics, computeCleaningStats } from '../utils/cleaningStats';
+import { defaultAutomationSettings, normalizeAutomation } from '../utils/automation';
+import { defaultDetectorConfig } from '../services/detector';
+import { DEFAULT_TRAVEL_CM_PER_SEC, msForDistance } from '../utils/travel';
 import {
   DeviceStatus,
   ConnectionStatus,
@@ -41,9 +42,16 @@ import {
   SensorThresholds,
   FirebaseCommandPatch,
   FirebaseConfig,
+  JogCommand,
   FirebaseConnectionState,
   FirebasePingResult,
   FirebaseSystemSnapshot,
+  AutomationSettings,
+  AutomationState,
+  DetectorConfig,
+  TriggerRecord,
+  TriggerSource,
+  VisionStatus,
 } from '../types';
 
 export interface SettingsSaveResult {
@@ -54,8 +62,6 @@ export interface SettingsSaveResult {
 
 interface AppState {
   // Mode
-  isDemoMode: boolean;
-  setDemoMode: (v: boolean) => void;
 
   // Firebase (live hardware)
   firebaseConfig: FirebaseConfig;
@@ -86,11 +92,26 @@ interface AppState {
   cleaningSettings: CleaningSettings;
   setCleaningSettings: (s: CleaningSettings) => Promise<SettingsSaveResult>;
 
+  // Automation (schedule, AI camera, sensor triggers)
+  automationSettings: AutomationSettings;
+  setAutomationSettings: (a: AutomationSettings) => Promise<SettingsSaveResult>;
+  automationState: AutomationState;
+  recordAutomationState: (patch: Partial<AutomationState>) => void;
+  detectorConfig: DetectorConfig;
+  setDetectorConfig: (c: DetectorConfig) => Promise<void>;
+  visionStatus: VisionStatus | null;
+  publishVision: (v: VisionStatus) => void;
+  lastTrigger: TriggerRecord | null;
+
   // Actions
+  /** Starts a cycle and records who asked for it. Resolves false if the command failed. */
+  requestCleaning: (source: TriggerSource, detail?: string | null) => Promise<boolean>;
   startCleaning: () => void;
   stopCleaning: () => void;
   scraperForward: () => void;
   scraperReverse: () => void;
+  /** Timed move used by calibration and by distance jogs. */
+  jog: (direction: 'forward' | 'reverse', distanceCm?: number, durationMs?: number) => void;
   scraperStop: () => void;
   pumpOn: () => void;
   pumpOff: () => void;
@@ -117,23 +138,49 @@ const defaultSensorThresholds: SensorThresholds = {
 };
 
 const defaultCleaningSettings: CleaningSettings = {
-  mode: 'manual',
-  schedule: {
-    enabled: false,
-    intervalHours: 6,
-    startTime: '06:00',
-    daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
-  },
+  scraperSpeedPercent: APP_CONFIG.defaultScraperSpeedPercent,
+  strokeDistanceCm: 60,
+  jogDistanceCm: 10,
+  travelCmPerSec: DEFAULT_TRAVEL_CM_PER_SEC,
   maxScraperRuntimeMs: APP_CONFIG.defaultMaxScraperRuntime,
   pumpDurationMs: APP_CONFIG.defaultPumpDuration,
-  motorTimeoutMs: APP_CONFIG.defaultMotorTimeout,
-  cooldownMs: APP_CONFIG.defaultCooldown,
-  limitSwitchMonitoring: true,
+  rinseAfterSweep: true,
   requireConfirmation: true,
-  emergencyStopEnabled: true,
 };
 
-const defaultFirebaseConfig: FirebaseConfig = { databaseUrl: '', authToken: '' };
+/** Keeps only known fields so settings saved by older builds load cleanly. */
+function normalizeCleaningSettings(raw: Partial<CleaningSettings>): CleaningSettings {
+  const d = defaultCleaningSettings;
+  const n = (v: unknown, f: number) => (typeof v === 'number' && Number.isFinite(v) ? v : f);
+  const b = (v: unknown, f: boolean) => (typeof v === 'boolean' ? v : f);
+  return {
+    scraperSpeedPercent: Math.min(
+      100,
+      Math.max(APP_CONFIG.minScraperSpeedPercent, n(raw.scraperSpeedPercent, d.scraperSpeedPercent))
+    ),
+    strokeDistanceCm: n(raw.strokeDistanceCm, d.strokeDistanceCm),
+    jogDistanceCm: n(raw.jogDistanceCm, d.jogDistanceCm),
+    travelCmPerSec: n(raw.travelCmPerSec, d.travelCmPerSec),
+    maxScraperRuntimeMs: n(raw.maxScraperRuntimeMs, d.maxScraperRuntimeMs),
+    pumpDurationMs: n(raw.pumpDurationMs, d.pumpDurationMs),
+    rinseAfterSweep: b(raw.rinseAfterSweep, d.rinseAfterSweep),
+    requireConfirmation: b(raw.requireConfirmation, d.requireConfirmation),
+  };
+}
+
+const emptyAutomationState: AutomationState = { lastAutoTriggerAt: null, lastScheduleKey: null };
+
+const TRIGGER_LABEL: Record<TriggerSource, string> = {
+  manual: 'Start cleaning cycle',
+  schedule: 'Scheduled cleaning cycle',
+  ai: 'AI-detected droppings: cleaning cycle',
+  sensor: 'Sensor-triggered cleaning cycle',
+};
+
+const defaultFirebaseConfig: FirebaseConfig = {
+  databaseUrl: 'https://pace-6c54c-default-rtdb.asia-southeast1.firebasedatabase.app',
+  authToken: '',
+};
 
 const CLEANING_STAGES: readonly CleaningCycleStage[] = [
   'idle',
@@ -151,8 +198,7 @@ const CLEANING_STAGES: readonly CleaningCycleStage[] = [
 // All actuator requests cleared — used by stop and emergency stop.
 const ALL_ACTUATORS_OFF: FirebaseCommandPatch = {
   manualCleanTrigger: false,
-  'controls/manualScraperForward': false,
-  'controls/manualScraperReverse': false,
+  'controls/jog': null,
   'controls/manualPumpTrigger': false,
 };
 
@@ -208,23 +254,17 @@ const AppContext = createContext<AppState | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(true);
   const [firebaseConfig, setFirebaseConfigState] = useState<FirebaseConfig>(defaultFirebaseConfig);
   const [sensorThresholds, setSensorThresholds] = useState<SensorThresholds>(defaultSensorThresholds);
   const [cleaningSettings, setCleaningSettings] = useState<CleaningSettings>(defaultCleaningSettings);
+  const [automationSettings, setAutomationSettingsState] = useState<AutomationSettings>(defaultAutomationSettings);
+  const [detectorConfig, setDetectorConfigState] = useState<DetectorConfig>(defaultDetectorConfig);
 
   // Shared sensor history (reset when switching modes)
   const [mq135History, setMQ135History] = useState<SensorDataPoint[]>([]);
   const [ultrasonicHistory, setUltrasonicHistory] = useState<SensorDataPoint[]>([]);
 
-  // Demo-mode state
-  const [demoDeviceStatus, setDemoDeviceStatus] = useState<DeviceStatus>(demoService.getDeviceStatus());
-  const [demoMQ135, setDemoMQ135] = useState<MQ135Reading>(demoService.getMQ135Reading());
-  const [demoUltrasonic, setDemoUltrasonic] = useState<UltrasonicReading>(demoService.getUltrasonicReading());
-  const [demoCleaningHistory, setDemoCleaningHistory] = useState<CleaningCycle[]>([]);
-  const [demoCleaningStats, setDemoCleaningStats] = useState<CleaningStats>(demoService.getCleaningStats());
-  const [demoEventLog, setDemoEventLog] = useState<EventLogEntry[]>([]);
-  const [demoAnalytics, setDemoAnalytics] = useState<AnalyticsSummary>(demoService.getAnalyticsSummary());
+  const [localVision, setLocalVision] = useState<VisionStatus | null>(null);
 
   // Live-mode state
   const [firebaseState, setFirebaseState] = useState<FirebaseConnectionState>('idle');
@@ -238,26 +278,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [liveEventLog, setLiveEventLog] = useState<EventLogEntry[]>([]);
 
   // Refs read from long-lived Firebase listeners
-  const isDemoModeRef = useRef(isDemoMode);
   const thresholdsRef = useRef(sensorThresholds);
   const prevSnapshotRef = useRef<FirebaseSystemSnapshot | null>(null);
   const liveCycleRef = useRef<LiveCycle | null>(null);
-  isDemoModeRef.current = isDemoMode;
+  const automationRef = useRef(automationSettings);
+  const cleaningSettingsRef = useRef(cleaningSettings);
+  cleaningSettingsRef.current = cleaningSettings;
+  // Ignore our own writes echoing back on the stream for a moment.
+  const lastAutomationWriteRef = useRef(0);
   thresholdsRef.current = sensorThresholds;
+  automationRef.current = automationSettings;
 
   // ---- Persistence ----
 
   useEffect(() => {
     (async () => {
       try {
-        const [demoStr, threshStr, cleanStr, fbStr, liveHistStr] = await Promise.all([
-          AsyncStorage.getItem(APP_CONFIG.storageKeys.demoMode),
+        const [threshStr, cleanStr, fbStr, liveHistStr, autoStr, detectorStr] = await Promise.all([
           AsyncStorage.getItem(APP_CONFIG.storageKeys.sensorThresholds),
           AsyncStorage.getItem(APP_CONFIG.storageKeys.cleaningSettings),
           AsyncStorage.getItem(APP_CONFIG.storageKeys.firebaseConfig),
           AsyncStorage.getItem(APP_CONFIG.storageKeys.liveCleaningHistory),
+          AsyncStorage.getItem(APP_CONFIG.storageKeys.automation),
+          AsyncStorage.getItem(APP_CONFIG.storageKeys.detectorConfig),
         ]);
-        if (demoStr !== null) setIsDemoMode(JSON.parse(demoStr) as boolean);
         if (threshStr) {
           const stored = JSON.parse(threshStr) as SensorThresholds;
           const migrated = migrateThresholds(stored);
@@ -266,8 +310,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             await AsyncStorage.setItem(APP_CONFIG.storageKeys.sensorThresholds, JSON.stringify(migrated));
           }
         }
-        if (cleanStr) setCleaningSettings({ ...defaultCleaningSettings, ...(JSON.parse(cleanStr) as CleaningSettings) });
-        if (fbStr) setFirebaseConfigState({ ...defaultFirebaseConfig, ...(JSON.parse(fbStr) as FirebaseConfig) });
+        if (cleanStr) setCleaningSettings(normalizeCleaningSettings(JSON.parse(cleanStr) as Partial<CleaningSettings>));
+        if (autoStr) setAutomationSettingsState(normalizeAutomation(JSON.parse(autoStr)));
+        if (detectorStr) setDetectorConfigState({ ...defaultDetectorConfig, ...(JSON.parse(detectorStr) as DetectorConfig) });
+        if (fbStr) {
+          const parsed = JSON.parse(fbStr) as Partial<FirebaseConfig>;
+          setFirebaseConfigState({
+            databaseUrl: normalizeDatabaseUrl(parsed.databaseUrl || '') || defaultFirebaseConfig.databaseUrl,
+            authToken: parsed.authToken ?? defaultFirebaseConfig.authToken,
+          });
+        }
         if (liveHistStr) setLiveCleaningHistory(JSON.parse(liveHistStr) as CleaningCycle[]);
       } catch (e) {
         console.warn('Failed to load settings:', e);
@@ -275,13 +327,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setHydrated(true);
       }
     })();
-  }, []);
-
-  const setDemoMode = useCallback(async (v: boolean) => {
-    setIsDemoMode(v);
-    try {
-      await AsyncStorage.setItem(APP_CONFIG.storageKeys.demoMode, JSON.stringify(v));
-    } catch {}
   }, []);
 
   const setFirebaseConfig = useCallback(async (config: FirebaseConfig) => {
@@ -305,7 +350,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem(APP_CONFIG.storageKeys.sensorThresholds, JSON.stringify(t));
     } catch {}
-    if (isDemoModeRef.current || !firebaseService.isConfigured()) return { syncedToDevice: false, error: null };
+    if (!firebaseService.isConfigured()) return { syncedToDevice: false, error: null };
     try {
       await firebaseService.writeConfig({
         ammoniaWarningThreshold: t.mq135.warningThreshold,
@@ -322,11 +367,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem(APP_CONFIG.storageKeys.cleaningSettings, JSON.stringify(s));
     } catch {}
-    if (isDemoModeRef.current || !firebaseService.isConfigured()) return { syncedToDevice: false, error: null };
+    if (!firebaseService.isConfigured()) return { syncedToDevice: false, error: null };
     try {
       await firebaseService.writeConfig({
+        scraperSpeedPercent: s.scraperSpeedPercent,
+        strokeDistanceCm: s.strokeDistanceCm,
+        strokeTimeMs: msForDistance(s.strokeDistanceCm, s.scraperSpeedPercent, s.travelCmPerSec),
+        jogDistanceCm: s.jogDistanceCm,
+        travelCmPerSec: s.travelCmPerSec,
         maxScraperRuntimeMs: s.maxScraperRuntimeMs,
         pumpDurationMs: s.pumpDurationMs,
+        rinseAfterSweep: s.rinseAfterSweep,
       });
       return { syncedToDevice: true, error: null };
     } catch (e) {
@@ -334,56 +385,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    demoService.configure({
-      pumpDurationMs: cleaningSettings.pumpDurationMs,
-      maxScraperRuntimeMs: cleaningSettings.maxScraperRuntimeMs,
-    });
-  }, [cleaningSettings.pumpDurationMs, cleaningSettings.maxScraperRuntimeMs]);
-
-  // ---- Demo mode ----
-
-  const syncDemoRecords = useCallback(() => {
-    setDemoCleaningHistory(demoService.getCleaningHistory());
-    setDemoCleaningStats(demoService.getCleaningStats());
-    setDemoEventLog(demoService.getEventLog());
+  const updateAutomationSettings = useCallback(async (a: AutomationSettings): Promise<SettingsSaveResult> => {
+    const next = normalizeAutomation(a);
+    automationRef.current = next;
+    lastAutomationWriteRef.current = Date.now();
+    setAutomationSettingsState(next);
+    try {
+      await AsyncStorage.setItem(APP_CONFIG.storageKeys.automation, JSON.stringify(next));
+    } catch {}
+    if (!firebaseService.isConfigured()) return { syncedToDevice: false, error: null };
+    try {
+      await firebaseService.writeAutomation(next);
+      return { syncedToDevice: true, error: null };
+    } catch (e) {
+      return { syncedToDevice: false, error: errorMessage(e) };
+    }
   }, []);
 
-  const loadDemoData = useCallback(() => {
-    setDemoDeviceStatus(demoService.getDeviceStatus());
-    setDemoMQ135(demoService.getMQ135Reading());
-    setDemoUltrasonic(demoService.getUltrasonicReading());
-    setMQ135History(demoService.getMQ135History(1));
-    setUltrasonicHistory(demoService.getUltrasonicHistory(1));
-    setDemoAnalytics(demoService.getAnalyticsSummary());
-    syncDemoRecords();
-  }, [syncDemoRecords]);
-
-  useEffect(() => {
-    if (!hydrated || !isDemoMode) return;
-    loadDemoData();
-
-    const unsubscribe = demoService.subscribe((status) => {
-      setDemoDeviceStatus(status);
-      syncDemoRecords();
-    });
-
-    const interval = setInterval(() => {
-      const mq = demoService.getMQ135Reading();
-      const us = demoService.getUltrasonicReading();
-      setDemoMQ135(mq);
-      setDemoUltrasonic(us);
-      setMQ135History((h) => appendDataPoint(h, { value: mq.value, timestamp: mq.timestamp }, APP_CONFIG.maxSensorDataPoints));
-      setUltrasonicHistory((h) =>
-        appendDataPoint(h, { value: us.distanceCm, timestamp: us.timestamp }, APP_CONFIG.maxSensorDataPoints)
-      );
-    }, APP_CONFIG.defaultMQ135RefreshInterval);
-
-    return () => {
-      unsubscribe();
-      clearInterval(interval);
+  const setDetectorConfig = useCallback(async (c: DetectorConfig) => {
+    const next: DetectorConfig = {
+      ...c,
+      endpoint: c.endpoint.trim(),
+      modelId: c.modelId.trim(),
+      apiKey: c.apiKey.trim(),
+      targetClass: c.targetClass.trim(),
     };
-  }, [hydrated, isDemoMode, loadDemoData, syncDemoRecords]);
+    setDetectorConfigState(next);
+    try {
+      await AsyncStorage.setItem(APP_CONFIG.storageKeys.detectorConfig, JSON.stringify(next));
+    } catch {}
+  }, []);
 
   // ---- Live (Firebase) mode ----
 
@@ -419,6 +450,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       prevSnapshotRef.current = snap;
       setLiveSnapshot(snap);
       setLastLiveUpdate(now);
+
+      // Another phone changed the automation rules: adopt them here too.
+      // If the database has none yet, publish this phone's rules.
+      if (!snap.automation && !prev) {
+        firebaseService.writeAutomation(automationRef.current).catch(() => {});
+      } else if (snap.automation && now - lastAutomationWriteRef.current > 3000) {
+        const remote = normalizeAutomation(snap.automation);
+        if (JSON.stringify(remote) !== JSON.stringify(automationRef.current)) {
+          automationRef.current = remote;
+          setAutomationSettingsState(remote);
+          AsyncStorage.setItem(APP_CONFIG.storageKeys.automation, JSON.stringify(remote)).catch(() => {});
+        }
+      }
 
       // Sensor history — append when the reading changed or on the firmware's 5s cadence
       const appendIfNew = (history: SensorDataPoint[], value: number) => {
@@ -471,7 +515,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           startTime: cycle.startTime,
           endTime: now,
           duration: now - cycle.startTime,
-          mode: snap.operatingMode?.toLowerCase() === 'automatic' ? 'automatic' : 'manual',
+          mode:
+            snap.lastTrigger && snap.lastTrigger.at >= cycle.startTime - 60_000
+              ? snap.lastTrigger.source === 'manual'
+                ? 'manual'
+                : 'automatic'
+              : 'manual',
           scraperActivated: true,
           pumpActivated: cycle.pumpActivated,
           status,
@@ -492,12 +541,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       } else if (snap.pump.active === false && prev.pump.active === true) {
         logLiveEvent('pump_deactivated', 'info', 'Water pump deactivated');
       }
-      if (snap.scraper.limitSwitchForward && !prev.scraper.limitSwitchForward) {
-        logLiveEvent('scraper_limit_reached', 'info', 'Forward (chute) limit switch triggered');
-      }
-      if (snap.scraper.limitSwitchReverse && !prev.scraper.limitSwitchReverse) {
-        logLiveEvent('scraper_limit_reached', 'info', 'Reverse (home) limit switch triggered');
-      }
       const newFault = (snap.scraper.fault !== prev.scraper.fault && snap.scraper.fault) || (snap.pump.fault !== prev.pump.fault && snap.pump.fault);
       if (newFault) logLiveEvent('actuator_fault', 'error', `Actuator fault: ${newFault}`);
       if (snap.controls.emergencyStop && !prev.controls.emergencyStop) {
@@ -508,7 +551,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    if (!hydrated || isDemoMode) return;
+    if (!hydrated) return;
 
     setMQ135History([]);
     setUltrasonicHistory([]);
@@ -538,10 +581,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       offState();
       firebaseService.stop();
     };
-  }, [hydrated, isDemoMode, firebaseConfig, handleLiveData, logLiveEvent]);
+  }, [hydrated, firebaseConfig, handleLiveData, logLiveEvent]);
 
   const sendLive = useCallback(
-    async (command: string, patch: FirebaseCommandPatch, description: string) => {
+    async (command: string, patch: FirebaseCommandPatch, description: string): Promise<boolean> => {
       setLiveCommand({ lastCommand: command, lastCommandTime: Date.now() });
       try {
         await firebaseService.sendCommand(patch);
@@ -552,103 +595,97 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           `Command sent: ${description}`,
           'app'
         );
+        return true;
       } catch (e) {
         const msg = errorMessage(e);
         setCommandError(`${description} failed: ${msg}`);
         logLiveEvent('actuator_fault', 'error', `Command "${description}" failed: ${msg}`, 'app');
+        return false;
       }
     },
     [logLiveEvent]
   );
 
+  // ---- Automation bookkeeping ----
+
+  const recordAutomationState = useCallback((patch: Partial<AutomationState>) => {
+    firebaseService.writeAutomationState(patch).catch((e: unknown) => setCommandError(errorMessage(e)));
+  }, []);
+
+  const publishVision = useCallback((v: VisionStatus) => {
+    setLocalVision(v); // instant feedback on the station itself
+    // A failed heartbeat shows up elsewhere as the station going stale.
+    firebaseService.writeVision(v).catch(() => {});
+  }, []);
+
   // ---- Unified actions ----
 
+  const requestCleaning = useCallback(
+    async (source: TriggerSource, detail: string | null = null): Promise<boolean> => {
+      const trigger: TriggerRecord = { source, at: Date.now(), detail };
+      const label = detail ? `${TRIGGER_LABEL[source]} (${detail})` : TRIGGER_LABEL[source];
+      return sendLive('start_cleaning', { manualCleanTrigger: true, lastTrigger: trigger }, label);
+    },
+    [sendLive]
+  );
+
   const startCleaning = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulateStartCleaning());
-    else void sendLive('start_cleaning', { manualCleanTrigger: true }, 'Start cleaning cycle');
-  }, [isDemoMode, sendLive]);
+    void requestCleaning('manual');
+  }, [requestCleaning]);
 
   const stopCleaning = useCallback(() => {
-    if (isDemoMode) {
-      setDemoDeviceStatus(demoService.simulateStopCleaning());
-      syncDemoRecords();
-    } else {
-      void sendLive('stop_cleaning', ALL_ACTUATORS_OFF, 'Stop cleaning cycle');
-    }
-  }, [isDemoMode, sendLive, syncDemoRecords]);
+    void sendLive('stop_cleaning', ALL_ACTUATORS_OFF, 'Stop cleaning cycle');
+  }, [sendLive]);
 
-  const scraperForward = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulateScraperForward());
-    else
+  /** Moves the scraper a set distance (default: the jog distance), or for an exact time when given. */
+  const jog = useCallback(
+    (direction: 'forward' | 'reverse', distanceCm?: number, durationMs?: number) => {
+      const cs = cleaningSettingsRef.current;
+      const cm = distanceCm ?? cs.jogDistanceCm;
+      const ms = durationMs ?? msForDistance(cm, cs.scraperSpeedPercent, cs.travelCmPerSec);
+      const move: JogCommand = { direction, distanceCm: cm, durationMs: Math.min(ms, cs.maxScraperRuntimeMs), at: Date.now() };
+      const where = direction === 'forward' ? 'toward the bin' : 'back home';
       void sendLive(
-        'scraper_forward',
-        { 'controls/manualScraperForward': true, 'controls/manualScraperReverse': false },
-        'Scraper forward'
+        direction === 'forward' ? 'scraper_forward' : 'scraper_reverse',
+        { 'controls/jog': move },
+        durationMs ? `Test run ${where} for ${Math.round(ms / 1000)} s` : `Move ${cm} cm ${where}`
       );
-  }, [isDemoMode, sendLive]);
+    },
+    [sendLive]
+  );
 
-  const scraperReverse = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulateScraperReverse());
-    else
-      void sendLive(
-        'scraper_reverse',
-        { 'controls/manualScraperForward': false, 'controls/manualScraperReverse': true },
-        'Scraper reverse'
-      );
-  }, [isDemoMode, sendLive]);
+  const scraperForward = useCallback(() => jog('forward'), [jog]);
+  const scraperReverse = useCallback(() => jog('reverse'), [jog]);
 
   const scraperStop = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulateScraperStop());
-    else
-      void sendLive(
-        'scraper_stop',
-        { 'controls/manualScraperForward': false, 'controls/manualScraperReverse': false },
-        'Scraper stop'
-      );
-  }, [isDemoMode, sendLive]);
+    void sendLive('scraper_stop', { 'controls/jog': null }, 'Scraper stop');
+  }, [sendLive]);
 
   const pumpOn = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulatePumpOn());
-    else void sendLive('pump_on', { 'controls/manualPumpTrigger': true }, 'Pump on');
-  }, [isDemoMode, sendLive]);
+    void sendLive('pump_on', { 'controls/manualPumpTrigger': true }, 'Pump on');
+  }, [sendLive]);
 
   const pumpOff = useCallback(() => {
-    if (isDemoMode) setDemoDeviceStatus(demoService.simulatePumpOff());
-    else void sendLive('pump_off', { 'controls/manualPumpTrigger': false }, 'Pump off');
-  }, [isDemoMode, sendLive]);
+    void sendLive('pump_off', { 'controls/manualPumpTrigger': false }, 'Pump off');
+  }, [sendLive]);
 
   const emergencyStop = useCallback(() => {
-    if (isDemoMode) {
-      setDemoDeviceStatus(demoService.simulateEmergencyStop());
-      syncDemoRecords();
-    } else {
-      void sendLive('emergency_stop', { ...ALL_ACTUATORS_OFF, 'controls/emergencyStop': true }, 'EMERGENCY STOP');
-    }
-  }, [isDemoMode, sendLive, syncDemoRecords]);
+    void sendLive('emergency_stop', { ...ALL_ACTUATORS_OFF, 'controls/emergencyStop': true }, 'Emergency stop');
+  }, [sendLive]);
 
   const resetEmergencyStop = useCallback(() => {
-    if (isDemoMode) {
-      setDemoDeviceStatus(demoService.simulateResetEmergencyStop());
-      syncDemoRecords();
-    } else {
-      void sendLive('reset_emergency_stop', { 'controls/emergencyStop': false }, 'Release emergency stop');
-    }
-  }, [isDemoMode, sendLive, syncDemoRecords]);
+    void sendLive('reset_emergency_stop', { 'controls/emergencyStop': false }, 'Release emergency stop');
+  }, [sendLive]);
 
   const refreshData = useCallback(() => {
-    if (isDemoMode) {
-      loadDemoData();
-    } else {
-      firebaseService.refresh().catch((e: unknown) => setConnectionError(errorMessage(e)));
-    }
-  }, [isDemoMode, loadDemoData]);
+    firebaseService.refresh().catch((e: unknown) => setConnectionError(errorMessage(e)));
+  }, []);
 
   // ---- Derived state ----
 
-  const connectionStatus: ConnectionStatus = isDemoMode ? 'demo' : connectionFromFirebase(firebaseState);
+  const connectionStatus: ConnectionStatus = connectionFromFirebase(firebaseState);
 
   const deviceStatus = useMemo<DeviceStatus>(() => {
-    if (isDemoMode) return { ...demoDeviceStatus, connectionStatus };
 
     const snap = liveSnapshot;
     const cleaning = isSnapshotCleaning(snap);
@@ -667,7 +704,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return {
       connectionStatus,
-      operatingMode: snap?.operatingMode?.toLowerCase() === 'automatic' ? 'automatic' : 'manual',
+      operatingMode: automationSettings.mode,
       lastCommunicationTime: lastLiveUpdate,
       lastCleaningCycleTime: snap?.lastCleaningCycleTime ?? lastLiveCycle?.endTime ?? null,
       scraper: {
@@ -675,10 +712,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         running: snap?.scraper.running ?? cleaning,
         direction,
         stage,
-        limitSwitches: {
-          forward: snap?.scraper.limitSwitchForward ?? false,
-          reverse: snap?.scraper.limitSwitchReverse ?? false,
-        },
         lastCommand: liveCommand.lastCommand,
         lastCommandTime: liveCommand.lastCommandTime,
         fault: snap?.scraper.fault ?? null,
@@ -702,8 +735,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       uptime: null,
     };
   }, [
-    isDemoMode,
-    demoDeviceStatus,
     connectionStatus,
     liveSnapshot,
     lastLiveUpdate,
@@ -713,13 +744,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     cleaningSettings.maxScraperRuntimeMs,
     cleaningSettings.pumpDurationMs,
     firebaseConfig.databaseUrl,
+    automationSettings.mode,
   ]);
 
   const mq135Reading = useMemo<MQ135Reading>(() => {
     const trend = computeTrend(mq135History, 1);
-    if (isDemoMode) {
-      return { ...demoMQ135, status: classifyAmmonia(demoMQ135.value, sensorThresholds), trend };
-    }
     const ppm = liveSnapshot?.ammoniaLevel ?? null;
     return {
       value: ppm ?? 0,
@@ -731,19 +760,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: ppm === null ? 'unavailable' : classifyAmmonia(ppm, sensorThresholds),
       trend: ppm === null ? 'unknown' : trend,
     };
-  }, [isDemoMode, demoMQ135, liveSnapshot, lastLiveUpdate, mq135History, sensorThresholds]);
+  }, [liveSnapshot, lastLiveUpdate, mq135History, sensorThresholds]);
 
   const ultrasonicReading = useMemo<UltrasonicReading>(() => {
     // Rising distance = falling waste level, so the trend is inverted for display.
     const distanceTrend = computeTrend(ultrasonicHistory, 0.5);
     const trend = distanceTrend === 'rising' ? 'falling' : distanceTrend === 'falling' ? 'rising' : distanceTrend;
-    if (isDemoMode) {
-      return {
-        ...demoUltrasonic,
-        status: classifyDistance(demoUltrasonic.distanceCm, sensorThresholds),
-        trend,
-      };
-    }
     const snap = liveSnapshot;
     const distance =
       snap?.distanceCm ?? (snap?.binCapacity !== null && snap?.binCapacity !== undefined ? distanceFromBinCapacity(snap.binCapacity) : null);
@@ -759,7 +781,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: distance === null ? 'unavailable' : classifyDistance(distance, sensorThresholds),
       trend: distance === null ? 'unknown' : trend,
     };
-  }, [isDemoMode, demoUltrasonic, liveSnapshot, lastLiveUpdate, ultrasonicHistory, sensorThresholds]);
+  }, [liveSnapshot, lastLiveUpdate, ultrasonicHistory, sensorThresholds]);
 
   const liveStats = useMemo(() => computeCleaningStats(liveCleaningHistory), [liveCleaningHistory]);
   const liveAnalytics = useMemo(
@@ -770,31 +792,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        isDemoMode,
-        setDemoMode,
         firebaseConfig,
         setFirebaseConfig,
         testFirebaseConnection,
-        connectionError: isDemoMode ? null : connectionError,
-        commandError: isDemoMode ? null : commandError,
+        connectionError,
+        commandError,
         deviceStatus,
         connectionStatus,
         mq135Reading,
         ultrasonicReading,
         mq135History,
         ultrasonicHistory,
-        cleaningHistory: isDemoMode ? demoCleaningHistory : liveCleaningHistory,
-        cleaningStats: isDemoMode ? demoCleaningStats : liveStats,
-        eventLog: isDemoMode ? demoEventLog : liveEventLog,
-        analyticsSummary: isDemoMode ? demoAnalytics : liveAnalytics,
+        cleaningHistory: liveCleaningHistory,
+        cleaningStats: liveStats,
+        eventLog: liveEventLog,
+        analyticsSummary: liveAnalytics,
         sensorThresholds,
         setSensorThresholds: updateThresholds,
         cleaningSettings,
         setCleaningSettings: updateCleaningSettings,
+        automationSettings,
+        setAutomationSettings: updateAutomationSettings,
+        automationState: liveSnapshot?.automationState ?? emptyAutomationState,
+        recordAutomationState,
+        detectorConfig,
+        setDetectorConfig,
+        visionStatus: liveSnapshot?.vision ?? localVision,
+        publishVision,
+        lastTrigger: liveSnapshot?.lastTrigger ?? null,
+        requestCleaning,
         startCleaning,
         stopCleaning,
         scraperForward,
         scraperReverse,
+        jog,
         scraperStop,
         pumpOn,
         pumpOff,

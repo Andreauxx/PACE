@@ -1,12 +1,12 @@
 // ============================================================
-// AgriSweep — Modern Status Badge Component
+// AgriSweep — Status Badge
 // ============================================================
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../constants/theme';
+import { Colors, Fonts, FontSize, BorderRadius } from '../constants/theme';
 
-type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'demo';
+type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
 interface StatusBadgeProps {
   label: string;
@@ -16,69 +16,20 @@ interface StatusBadgeProps {
   showDot?: boolean;
 }
 
-const variantStyles: Record<BadgeVariant, { bg: string; text: string; dot: string; border: string }> = {
-  success: {
-    bg: '#ECFDF5',
-    text: '#047857',
-    dot: '#10B981',
-    border: 'rgba(16, 185, 129, 0.25)',
-  },
-  warning: {
-    bg: '#FFFBEB',
-    text: '#B45309',
-    dot: '#F59E0B',
-    border: 'rgba(245, 158, 11, 0.25)',
-  },
-  error: {
-    bg: '#FEF2F2',
-    text: '#B91C1C',
-    dot: '#EF4444',
-    border: 'rgba(239, 68, 68, 0.25)',
-  },
-  info: {
-    bg: '#F0F9FF',
-    text: '#0369A1',
-    dot: '#0284C7',
-    border: 'rgba(2, 132, 199, 0.25)',
-  },
-  neutral: {
-    bg: '#F8FAFC',
-    text: '#475569',
-    dot: '#94A3B8',
-    border: 'rgba(148, 163, 184, 0.25)',
-  },
-  demo: {
-    bg: '#F5F3FF',
-    text: '#6D28D9',
-    dot: '#8B5CF6',
-    border: 'rgba(139, 92, 246, 0.25)',
-  },
+const LOOK: Record<BadgeVariant, { bg: string; text: string; dot: string }> = {
+  success: { bg: Colors.mossTint, text: Colors.barnDark, dot: Colors.moss },
+  warning: { bg: Colors.strawTint, text: Colors.amberDark, dot: Colors.amber },
+  error: { bg: Colors.combTint, text: Colors.combDark, dot: Colors.comb },
+  info: { bg: Colors.rinseTint, text: Colors.rinse, dot: Colors.rinse },
+  neutral: { bg: Colors.sunken, text: Colors.muted, dot: Colors.faint },
 };
 
-export default function StatusBadge({
-  label,
-  variant = 'neutral',
-  size = 'sm',
-  icon,
-  showDot = true,
-}: StatusBadgeProps) {
-  const cfg = variantStyles[variant];
-  const isSmall = size === 'sm';
-
+export default function StatusBadge({ label, variant = 'neutral', size = 'sm', icon, showDot = true }: StatusBadgeProps) {
+  const look = LOOK[variant];
   return (
-    <View
-      style={[
-        styles.badge,
-        { backgroundColor: cfg.bg, borderColor: cfg.border },
-        isSmall && styles.badgeSm,
-      ]}
-    >
-      {icon ? (
-        icon
-      ) : showDot ? (
-        <View style={[styles.dot, { backgroundColor: cfg.dot }]} />
-      ) : null}
-      <Text style={[styles.label, { color: cfg.text }, isSmall && styles.labelSm]}>{label}</Text>
+    <View style={[styles.badge, { backgroundColor: look.bg }, size === 'md' && styles.badgeMd]}>
+      {icon ? icon : showDot ? <View style={[styles.dot, { backgroundColor: look.dot }]} /> : null}
+      <Text style={[styles.label, { color: look.text }, size === 'md' && styles.labelMd]}>{label}</Text>
     </View>
   );
 }
@@ -87,30 +38,26 @@ const styles = StyleSheet.create({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
     alignSelf: 'flex-start',
   },
-  badgeSm: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
+  badgeMd: {
+    paddingHorizontal: 11,
+    paddingVertical: 5,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   label: {
-    fontSize: FontSize.sm,
-    fontWeight: FontWeight.semibold,
-    letterSpacing: 0.2,
-  },
-  labelSm: {
+    fontFamily: Fonts.bold,
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
+  },
+  labelMd: {
+    fontSize: FontSize.sm,
   },
 });

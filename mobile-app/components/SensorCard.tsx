@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react-native';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows } from '../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Shadows, Spacing } from '../constants/theme';
 import StatusBadge from './StatusBadge';
 import { SensorStatus } from '../types';
 
@@ -40,24 +40,24 @@ const statusLabels: Record<SensorStatus, string> = {
 function TrendBadge({ trend }: { trend: string }) {
   if (trend === 'rising') {
     return (
-      <View style={[styles.trendBadge, { backgroundColor: '#FFFBEB', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
-        <TrendingUp size={13} color="#D97706" strokeWidth={2.5} />
-        <Text style={[styles.trendText, { color: '#B45309' }]}>Rising</Text>
+      <View style={[styles.trendBadge, { backgroundColor: Colors.warningLight, borderColor: 'rgba(185, 127, 14, 0.3)' }]}>
+        <TrendingUp size={13} color={Colors.warningDark} strokeWidth={2.5} />
+        <Text style={[styles.trendText, { color: Colors.warningDark }]}>Rising</Text>
       </View>
     );
   }
   if (trend === 'falling') {
     return (
-      <View style={[styles.trendBadge, { backgroundColor: '#F0F9FF', borderColor: 'rgba(2, 132, 199, 0.3)' }]}>
-        <TrendingDown size={13} color="#0284C7" strokeWidth={2.5} />
-        <Text style={[styles.trendText, { color: '#0369A1' }]}>Falling</Text>
+      <View style={[styles.trendBadge, { backgroundColor: Colors.infoLight, borderColor: 'rgba(45, 110, 147, 0.3)' }]}>
+        <TrendingDown size={13} color={Colors.info} strokeWidth={2.5} />
+        <Text style={[styles.trendText, { color: Colors.info }]}>Falling</Text>
       </View>
     );
   }
   return (
-    <View style={[styles.trendBadge, { backgroundColor: '#F8FAFC', borderColor: 'rgba(148, 163, 184, 0.25)' }]}>
-      <Minus size={13} color="#64748B" strokeWidth={2.5} />
-      <Text style={[styles.trendText, { color: '#64748B' }]}>Stable</Text>
+    <View style={[styles.trendBadge, { backgroundColor: Colors.sunken, borderColor: 'rgba(105, 115, 109, 0.25)' }]}>
+      <Minus size={13} color={Colors.textTertiary} strokeWidth={2.5} />
+      <Text style={[styles.trendText, { color: Colors.textTertiary }]}>Stable</Text>
     </View>
   );
 }
@@ -112,11 +112,8 @@ export default function SensorCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 14,
     padding: Spacing.lg,
-    ...Shadows.sm,
     marginBottom: Spacing.lg,
   },
   header: {
@@ -132,18 +129,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconBox: {
-    width: 40,
-    height: 40,
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     letterSpacing: -0.2,
   },
@@ -151,7 +146,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
     marginTop: 1,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   body: {
     flexDirection: 'row',
@@ -167,15 +162,14 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 34,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: Colors.text,
     letterSpacing: -1,
   },
   unit: {
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
-    fontWeight: FontWeight.semibold,
-    textTransform: 'uppercase',
+    fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },
   trendBadge: {
@@ -189,7 +183,7 @@ const styles = StyleSheet.create({
   },
   trendText: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
+    fontFamily: Fonts.bold,
   },
   footer: {
     flexDirection: 'row',
@@ -200,12 +194,12 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: FontSize.xs,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
   },
   extra: {
     marginTop: Spacing.md,
     paddingTop: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: Colors.borderLight,
   },
 });

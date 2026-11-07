@@ -7,7 +7,7 @@
 import React, { useId, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent, GestureResponderEvent } from 'react-native';
 import Svg, { Path, Line, Text as SvgText, Circle, Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius, Shadows, SvgFontFamily } from '../constants/theme';
+import { BorderRadius, Colors, FontSize, FontWeight, Fonts, Shadows, Spacing, SvgFontFamily } from '../constants/theme';
 import { SensorDataPoint } from '../types';
 
 export interface ChartThreshold {
@@ -268,11 +268,8 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 14,
     padding: Spacing.lg,
-    ...Shadows.sm,
     marginBottom: Spacing.lg,
   },
   header: {
@@ -283,20 +280,20 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.bold,
+    fontFamily: Fonts.bold,
     color: Colors.text,
     letterSpacing: -0.2,
   },
   unitLabel: {
     fontSize: 11,
-    color: '#047857',
-    fontWeight: FontWeight.bold,
+    color: Colors.primaryDark,
+    fontFamily: Fonts.bold,
     backgroundColor: Colors.primarySurface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: 'rgba(47, 90, 69, 0.25)',
     overflow: 'hidden',
   },
   emptyChart: {
@@ -311,14 +308,14 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: FontSize.sm,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.medium,
+    fontFamily: Fonts.regular,
     textAlign: 'center',
   },
   tooltip: {
     position: 'absolute',
     top: 0,
     width: TOOLTIP_WIDTH,
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.text,
     borderRadius: 10,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -327,17 +324,18 @@ const styles = StyleSheet.create({
   },
   tooltipValue: {
     fontSize: FontSize.sm,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: '#FFFFFF',
   },
   tooltipUnit: {
     fontSize: FontSize.xs,
-    fontWeight: FontWeight.semibold,
-    color: '#94A3B8',
+    fontFamily: Fonts.bold,
+    color: Colors.textTertiary,
   },
   tooltipTime: {
+    fontFamily: Fonts.regular,
     fontSize: 10,
-    color: '#CBD5E1',
+    color: Colors.disabled,
     marginTop: 1,
   },
   statsRow: {
@@ -354,13 +352,12 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     color: Colors.textTertiary,
-    fontWeight: FontWeight.semibold,
-    textTransform: 'uppercase',
+    fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },
   statValue: {
     fontSize: FontSize.md,
-    fontWeight: FontWeight.extrabold,
+    fontFamily: Fonts.display,
     color: Colors.text,
     marginTop: 2,
   },

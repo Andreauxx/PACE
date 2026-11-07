@@ -12,7 +12,6 @@ export type EventType =
   | 'cleaning_failed'
   | 'pump_activated'
   | 'pump_deactivated'
-  | 'scraper_limit_reached'
   | 'motor_timeout'
   | 'actuator_fault'
   | 'settings_changed'
@@ -28,7 +27,7 @@ export interface EventLogEntry {
   message: string;
   timestamp: number;
   details?: Record<string, unknown>;
-  source: 'device' | 'app' | 'demo';
+  source: 'device' | 'app';
 }
 
 export type TimeRange = 'last_hour' | 'last_24h' | 'last_7d' | 'custom';

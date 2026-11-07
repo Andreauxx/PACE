@@ -3,6 +3,8 @@
 // Mirrors firebase_db_structure.json and esp32_firmware.ino.
 // ============================================================
 
+import { AutomationState, TriggerRecord, VisionStatus } from './automation';
+
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
@@ -17,8 +19,6 @@ export interface FirebaseScraperNode {
   running: boolean | null;
   direction: string | null;
   stage: string | null;
-  limitSwitchForward: boolean | null;
-  limitSwitchReverse: boolean | null;
   fault: string | null;
 }
 
@@ -28,16 +28,30 @@ export interface FirebasePumpNode {
   fault: string | null;
 }
 
+/** One timed move. The firmware runs the motor for durationMs, then sets /system/controls/jog to null. */
+export interface JogCommand {
+  direction: 'forward' | 'reverse';
+  distanceCm: number;
+  durationMs: number;
+  at: number;
+}
+
 export interface FirebaseControlsNode {
-  manualScraperForward: boolean;
-  manualScraperReverse: boolean;
+  jog: JogCommand | null;
   manualPumpTrigger: boolean;
   emergencyStop: boolean;
 }
 
 export interface FirebaseSystemConfig {
+  scraperSpeedPercent: number;
+  strokeDistanceCm: number;
+  /** Stroke run time at the current speed, so the firmware needs no maths. */
+  strokeTimeMs: number;
+  jogDistanceCm: number;
+  travelCmPerSec: number;
   maxScraperRuntimeMs: number;
   pumpDurationMs: number;
+  rinseAfterSweep: boolean;
   ammoniaWarningThreshold: number;
   binWarningDistanceCm: number;
 }
@@ -57,17 +71,23 @@ export interface FirebaseSystemSnapshot {
   pump: FirebasePumpNode;
   controls: FirebaseControlsNode;
   config: Partial<FirebaseSystemConfig>;
+  /** Raw /system/automation, validated later against app defaults. */
+  automation: JsonObject | null;
+  automationState: AutomationState;
+  vision: VisionStatus | null;
+  lastTrigger: TriggerRecord | null;
 }
 
 /** Writable paths, relative to `/system`. Sent as a single multi-path PATCH. */
 export type FirebaseControlPath =
   | 'manualCleanTrigger'
-  | 'controls/manualScraperForward'
-  | 'controls/manualScraperReverse'
   | 'controls/manualPumpTrigger'
   | 'controls/emergencyStop';
 
-export type FirebaseCommandPatch = Partial<Record<FirebaseControlPath, boolean>>;
+export type FirebaseCommandPatch = Partial<Record<FirebaseControlPath, boolean>> & {
+  lastTrigger?: TriggerRecord;
+  'controls/jog'?: JogCommand | null;
+};
 
 export interface FirebasePingResult {
   ok: boolean;
